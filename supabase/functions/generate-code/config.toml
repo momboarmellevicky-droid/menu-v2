@@ -1,0 +1,4 @@
+project_id = "menu-v2"
+
+[functions.generate-code]
+verify_jwt = true
