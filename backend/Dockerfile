@@ -2,15 +2,21 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Installation des dépendances
+# Curl nécessaire pour le HEALTHCHECK
+RUN apk add --no-cache curl
+
+# Installation de TOUTES les dépendances (dev incluses, nécessaires pour le build TypeScript)
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci
 
 # Copie du code source
 COPY . .
 
 # Build TypeScript
 RUN npm run build
+
+# Allègement : ne garder que les dépendances de production après le build
+RUN npm prune --production
 
 # Exposition du port
 EXPOSE 3001
