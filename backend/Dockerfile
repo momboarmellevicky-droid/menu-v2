@@ -7,7 +7,7 @@ RUN apk add --no-cache curl
 
 # Installation de TOUTES les dépendances (dev incluses, nécessaires pour le build TypeScript)
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 # Copie du code source
 COPY . .
