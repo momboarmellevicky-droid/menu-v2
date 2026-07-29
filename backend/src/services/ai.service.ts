@@ -79,7 +79,7 @@ Réponds UNIQUEMENT en JSON valide.`,
 Réponds avec le code optimisé en premier, puis les métriques.`,
   },
 ]
-export async function runMultiAgentPipeline(
+
   prompt: string,
   architecture: 'frontend' | 'fullstack' | 'mobile' = 'frontend',
   memory?: ProjectMemory,
@@ -149,7 +149,7 @@ Optimise le code en appliquant les corrections suggérées.
     throw error
   }
 }
-export async function runMultiAgentPipeline(
+
   prompt: string,
   architecture: 'frontend' | 'fullstack' | 'mobile' = 'frontend',
   memory?: ProjectMemory,
