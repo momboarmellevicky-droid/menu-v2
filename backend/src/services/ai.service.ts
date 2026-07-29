@@ -79,77 +79,7 @@ Réponds UNIQUEMENT en JSON valide.`,
 Réponds avec le code optimisé en premier, puis les métriques.`,
   },
 ]
-
-  prompt: string,
-  architecture: 'frontend' | 'fullstack' | 'mobile' = 'frontend',
-  memory?: ProjectMemory,
-  onProgress?: (agent: string, progress: number) => void
-): Promise<GenerationResult[]> {
-  const results: GenerationResult[] = []
-
-  const enrichedPrompt = memory
-    ? `[CONTEXTE PROJET]\nVision: ${memory.vision}\nArchitecture: ${memory.architecture}\nComposants existants: ${memory.components.join(', ')}\n\n[Nouvelle demande]\n${prompt}`
-    : prompt
-
-  const cacheKey = await cache.generateKey(enrichedPrompt, architecture)
-  const cached = await cache.get(cacheKey)
-
-  if (cached) {
-    logger.info('Cache hit pour la génération')
-    return JSON.parse(cached)
-  }
-
-  try {
-    onProgress?.('Analyste', 10)
-    const analysis = await callAgent(AGENTS[0], enrichedPrompt)
-    results.push(analysis)
-    if (analysis.status === 'error') throw new Error(`Erreur Analyste: ${analysis.output}`)
-
-    onProgress?.('Architecte', 25)
-    const arch = await callAgent(AGENTS[1], JSON.stringify({ analysis: analysis.output, type: architecture }))
-    results.push(arch)
-
-    onProgress?.('Designer', 40)
-    const design = await callAgent(AGENTS[2], JSON.stringify({ architecture: arch.output, features: analysis.output }))
-    results.push(design)
-
-    onProgress?.('Développeur', 60)
-    const dev = await callAgent(AGENTS[3], `
-ARCHITECTURE: ${arch.output}
-DESIGN: ${design.output}
-TYPE: ${architecture}
-
-Génère le code COMPLET pour: ${prompt}
-    `)
-    results.push(dev)
-
-    onProgress?.('Testeur', 80)
-    const test = await callAgent(AGENTS[4], dev.output)
-    results.push(test)
-
-    onProgress?.('Optimiseur', 95)
-    const optimized = await callAgent(AGENTS[5], `
-CODE ORIGINAL:
-${dev.output}
-
-RAPPORT TESTS:
-${test.output}
-
-Optimise le code en appliquant les corrections suggérées.
-    `)
-    results.push(optimized)
-
-    onProgress?.('Optimiseur', 100)
-
-    await cache.set(cacheKey, JSON.stringify(results), 7200)
-
-    return results
-  } catch (error) {
-    logger.error('Erreur pipeline multi-agents:', error)
-    throw error
-  }
-}
-
+export async function runMultiAgentPipeline(
   prompt: string,
   architecture: 'frontend' | 'fullstack' | 'mobile' = 'frontend',
   memory?: ProjectMemory,
