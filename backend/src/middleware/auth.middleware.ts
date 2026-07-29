@@ -10,7 +10,7 @@ export async function authenticateUser(req: Request, res: Response, next: NextFu
     const authHeader = req.headers.authorization
 
     if (!authHeader?.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Token d'authentification manquant' })
+return res.status(401).json({ error: "Token d'authentification manquant" })
     }
 
     const token = authHeader.split(' ')[1]
@@ -22,7 +22,7 @@ export async function authenticateUser(req: Request, res: Response, next: NextFu
     const { data: { user }, error } = await supabase.auth.getUser(token)
 
     if (error || !user) {
-      logger.warn('Tentative d'accès avec token invalide')
+      logger.warn("Tentative d'accès avec token invalide")
       return res.status(401).json({ error: 'Token invalide ou expiré' })
     }
 
