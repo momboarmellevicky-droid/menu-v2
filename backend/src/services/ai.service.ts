@@ -40,19 +40,3 @@ Réponds UNIQUEMENT en JSON valide.`,
 - userFlow: étapes du parcours utilisateur
 Réponds UNIQUEMENT en JSON valide.`,
   },
-  {
-    id: 'developer',
-    name: 'Développeur',
-    role: 'developer',
-    systemPrompt: `Tu es un développeur Full Stack React/TypeScript expert. RÈGLES STRICTES :
-- Composants React fonctionnels avec hooks
-- TypeScript strict (pas de 'any')
-- Tailwind CSS pour le styling
-- Accessibilité (ARIA labels, roles)
-- Props typées avec interfaces
-- Gestion d'erreurs avec Error Boundary
-- Code splité en fichiers logiques
-Génère le code COMPLET et FONCTIONNEL, pas de placeholders.`,
-  },
-  {
-    id:
