@@ -15,8 +15,8 @@ const items = [
   { id: '2', title: 'Boutique en ligne', description: 'Template e-commerce avec panier et paiement', category: 'ecommerce', author: 'Community', rating: 4.7, downloads: 1890, price: 0, tags: ['Next.js', 'Stripe', 'Prisma'] },
   { id: '3', title: 'CRM Pro', description: 'Gestion clients avec pipeline et tâches', category: 'crm', author: 'MÉNU Team', rating: 4.8, downloads: 1560, price: 0, tags: ['React', 'Node.js', 'MongoDB'] },
   { id: '4', title: 'Formulaire multi-étapes', description: 'Wizard form avec validation et progression', category: 'form', author: 'Community', rating: 4.6, downloads: 3200, price: 0, tags: ['React Hook Form', 'Zod', 'Framer'] },
-  { id: '5', title: 'Admin Panel', description: 'Panneau d'administration avec tables et CRUD', category: 'dashboard', author: 'MÉNU Team', rating: 4.9, downloads: 4100, price: 0, tags: ['React', 'TanStack Table', 'Shadcn'] },
-  { id: '6', title: 'Landing Page SaaS', description: 'Page d'accueil moderne pour SaaS', category: 'form', author: 'Community', rating: 4.5, downloads: 2800, price: 0, tags: ['React', 'Framer Motion', 'Tailwind'] },
+  { id: '5', title: 'Admin Panel', description: "Panneau d'administration avec tables et CRUD", category: 'dashboard', author: 'MÉNU Team', rating: 4.9, downloads: 4100, price: 0, tags: ['React', 'TanStack Table', 'Shadcn'] },
+  { id: '6', title: 'Landing Page SaaS', description: "Page d'accueil moderne pour SaaS", category: 'form', author: 'Community', rating: 4.5, downloads: 2800, price: 0, tags: ['React', 'Framer Motion', 'Tailwind'] },
 ]
 
 export default function MarketplacePage() {
@@ -36,7 +36,6 @@ export default function MarketplacePage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold mb-3">
             <span className="bg-gradient-to-r from-secondary to-primary bg-clip-text text-transparent">
@@ -48,7 +47,6 @@ export default function MarketplacePage() {
           </p>
         </div>
 
-        {/* Search & Filter */}
         <div className="flex flex-col md:flex-row gap-4 mb-10">
           <div className="relative flex-1">
             <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
@@ -62,7 +60,6 @@ export default function MarketplacePage() {
           </div>
         </div>
 
-        {/* Categories */}
         <div className="flex flex-wrap gap-2 mb-8">
           {categories.map((cat) => (
             <button
@@ -80,7 +77,6 @@ export default function MarketplacePage() {
           ))}
         </div>
 
-        {/* Grid */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((item, i) => (
             <motion.div
@@ -135,4 +131,4 @@ export default function MarketplacePage() {
       </motion.div>
     </div>
   )
-}
+              }
