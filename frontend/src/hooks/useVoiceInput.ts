@@ -17,7 +17,7 @@ export function useVoiceInput(): UseVoiceInputReturn {
 
   const startListening = useCallback(() => {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      setError('La reconnaissance vocale n'est pas supportée par votre navigateur')
+      setError("La reconnaissance vocale n'est pas supportée par votre navigateur")
       return
     }
 
