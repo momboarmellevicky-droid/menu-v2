@@ -235,7 +235,12 @@ export async function generateFullStack(
 }
 
 function extractCodeBlock(text: string, language: string): string | null {
-  const regex = new RegExp(`\\`\\`\\`${language}([\s\S]*?)\\`\\`\\``, 'g')
+  function extractCodeBlock(text: string, language: string): string | null {
+  const fence = '```'
+  const regex = new RegExp(fence + language + '([\\s\\S]*?)' + fence, 'g')
+  const matches = [...text.matchAll(regex)]
+  return matches.length > 0 ? matches.map(m => m[1].trim()).join('\n\n') : null
+  }
   const matches = [...text.matchAll(regex)]
   return matches.length > 0 ? matches.map(m => m[1].trim()).join('\n\n') : null
 }
