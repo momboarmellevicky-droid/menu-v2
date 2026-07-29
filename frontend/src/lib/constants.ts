@@ -36,7 +36,7 @@ export const FEATURES = [
   {
     icon: 'Brain',
     title: 'MÉNU Memory Engine',
-    description: 'L'IA conserve le contexte complet de votre projet : architecture, historique, préférences.',
+    description: "L'IA conserve le contexte complet de votre projet : architecture, historique, préférences.",
   },
   {
     icon: 'Wrench',
@@ -46,7 +46,7 @@ export const FEATURES = [
   {
     icon: 'Store',
     title: 'Marketplace',
-    description: 'Bibliothèque communautaire de composants, dashboards, CRM et modèles métiers prêts à l'emploi.',
+    description: "Bibliothèque communautaire de composants, dashboards, CRM et modèles métiers prêts à l'emploi.",
   },
   {
     icon: 'Users',
@@ -66,7 +66,7 @@ export const FEATURES = [
   {
     icon: 'Mic',
     title: 'Voice Creator',
-    description: 'Créez des applications entières rien qu'en parlant. L'IA comprend et construit.',
+    description: "Créez des applications entières rien qu'en parlant. L'IA comprend et construit.",
   },
 ] as const
 
