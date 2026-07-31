@@ -3,7 +3,7 @@ import { Check, Loader2, AlertCircle } from 'lucide-react'
 
 interface Agent {
   name: string
-  status: 'idle' | 'working' | 'completed' | 'error'
+  status: string
   progress: number
 }
 
