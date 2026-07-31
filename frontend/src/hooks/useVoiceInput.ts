@@ -21,8 +21,12 @@ export function useVoiceInput(): UseVoiceInputReturn {
       return
     }
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    const recognition = new SpeechRecognition()
+    const SpeechRecognitionCtor = window.SpeechRecognition ?? window.webkitSpeechRecognition
+    if (!SpeechRecognitionCtor) {
+      setError("La reconnaissance vocale n'est pas supportée par votre navigateur")
+      return
+    }
+    const recognition = new SpeechRecognitionCtor()
 
     recognition.lang = 'fr-FR'
     recognition.continuous = true
