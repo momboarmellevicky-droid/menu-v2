@@ -11,7 +11,7 @@ export default function Logo({ size = 80, className = '', animated = true }: Log
   const wrapperProps = animated
     ? {
         animate: { y: [0, -10, 0] },
-        transition: { duration: 6, repeat: Infinity, ease: 'easeInOut' },
+        transition: { duration: 6, repeat: Infinity, ease: 'easeInOut' as const },
       }
     : {}
 
