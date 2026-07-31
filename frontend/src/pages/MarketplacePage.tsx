@@ -1,6 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Search, Star, Download, Filter, LayoutDashboard, ShoppingCart, FileText, Users } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Search, Star, Download, Filter, LayoutDashboard, ShoppingCart, FileText, Users, Loader2 } from 'lucide-react'
+import { api } from '../lib/api'
+import { MarketplaceItem } from '../types'
+import { useCodeStore } from '../stores/codeStore'
 
 const categories = [
   { id: 'all', label: 'Tous', icon: Filter },
@@ -10,25 +14,44 @@ const categories = [
   { id: 'crm', label: 'CRM', icon: Users },
 ]
 
-const items = [
-  { id: '1', title: 'Dashboard Analytics', description: 'Tableau de bord complet avec graphiques et KPIs', category: 'dashboard', author: 'MÉNU Team', rating: 4.9, downloads: 2340, price: 0, tags: ['React', 'Charts', 'Tailwind'] },
-  { id: '2', title: 'Boutique en ligne', description: 'Template e-commerce avec panier et paiement', category: 'ecommerce', author: 'Community', rating: 4.7, downloads: 1890, price: 0, tags: ['Next.js', 'Stripe', 'Prisma'] },
-  { id: '3', title: 'CRM Pro', description: 'Gestion clients avec pipeline et tâches', category: 'crm', author: 'MÉNU Team', rating: 4.8, downloads: 1560, price: 0, tags: ['React', 'Node.js', 'MongoDB'] },
-  { id: '4', title: 'Formulaire multi-étapes', description: 'Wizard form avec validation et progression', category: 'form', author: 'Community', rating: 4.6, downloads: 3200, price: 0, tags: ['React Hook Form', 'Zod', 'Framer'] },
-  { id: '5', title: 'Admin Panel', description: "Panneau d'administration avec tables et CRUD", category: 'dashboard', author: 'MÉNU Team', rating: 4.9, downloads: 4100, price: 0, tags: ['React', 'TanStack Table', 'Shadcn'] },
-  { id: '6', title: 'Landing Page SaaS', description: "Page d'accueil moderne pour SaaS", category: 'form', author: 'Community', rating: 4.5, downloads: 2800, price: 0, tags: ['React', 'Framer Motion', 'Tailwind'] },
-]
-
 export default function MarketplacePage() {
+  const navigate = useNavigate()
+  const { setCurrentCode } = useCodeStore()
   const [activeCategory, setActiveCategory] = useState('all')
   const [search, setSearch] = useState('')
+  const [items, setItems] = useState<MarketplaceItem[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
 
-  const filtered = items.filter(item => {
-    const matchCategory = activeCategory === 'all' || item.category === activeCategory
-    const matchSearch = item.title.toLowerCase().includes(search.toLowerCase()) || 
-                       item.description.toLowerCase().includes(search.toLowerCase())
-    return matchCategory && matchSearch
-  })
+  useEffect(() => {
+    setIsLoading(true)
+    api.getMarketplaceItems(activeCategory === 'all' ? undefined : activeCategory, search || undefined)
+      .then(setItems)
+      .catch(() => setError('Impossible de charger le marketplace'))
+      .finally(() => setIsLoading(false))
+  }, [activeCategory, search])
+
+  const handleUse = async (item: MarketplaceItem) => {
+    setDownloadingId(item.id)
+    setError(null)
+    try {
+      const result = await api.downloadMarketplaceItem(item.id)
+      setCurrentCode({
+        id: item.id,
+        prompt: item.title,
+        code: result.code,
+        language: 'tsx',
+        framework: 'react',
+        createdAt: new Date(),
+      })
+      navigate('/generate')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur lors du téléchargement')
+    } finally {
+      setDownloadingId(null)
+    }
+  }
 
   return (
     <div className="min-h-screen pt-24 px-4 pb-10 max-w-7xl mx-auto relative z-10">
@@ -46,6 +69,12 @@ export default function MarketplacePage() {
             Bibliothèque communautaire de composants, templates et modèles métiers prêts à l'emploi.
           </p>
         </div>
+
+        {error && (
+          <div className="mb-8 px-4 py-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl">
+            {error}
+          </div>
+        )}
 
         <div className="flex flex-col md:flex-row gap-4 mb-10">
           <div className="relative flex-1">
@@ -77,58 +106,66 @@ export default function MarketplacePage() {
           ))}
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map((item, i) => (
-            <motion.div
-              key={item.id}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.05 }}
-              whileHover={{ y: -4 }}
-              className="bg-bg-card border border-border rounded-2xl p-6 hover:border-primary/30 transition-colors group"
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-primary/20 to-secondary/20 flex items-center justify-center">
-                  <LayoutDashboard size={24} className="text-primary" />
-                </div>
-                <span className="px-2 py-1 bg-green-500/10 text-green-400 text-xs rounded-lg border border-green-500/20">
-                  Gratuit
-                </span>
-              </div>
-
-              <h3 className="font-semibold text-lg mb-2 group-hover:text-primary transition-colors">
-                {item.title}
-              </h3>
-              <p className="text-text-muted text-sm mb-4">{item.description}</p>
-
-              <div className="flex flex-wrap gap-1.5 mb-4">
-                {item.tags.map((tag) => (
-                  <span key={tag} className="px-2 py-0.5 bg-white/5 text-text-muted text-xs rounded-md">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-
-              <div className="flex items-center justify-between pt-4 border-t border-border">
-                <div className="flex items-center gap-3 text-sm text-text-muted">
-                  <span className="flex items-center gap-1">
-                    <Star size={14} className="text-yellow-400" />
-                    {item.rating}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Download size={14} />
-                    {item.downloads}
+        {isLoading ? (
+          <div className="p-16 text-center text-text-muted">
+            <Loader2 size={28} className="mx-auto mb-3 animate-spin" />
+            Chargement...
+          </div>
+        ) : items.length === 0 ? (
+          <div className="p-16 text-center text-text-muted">
+            <p>Aucun template trouvé.</p>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {items.map((item, i) => (
+              <motion.div
+                key={item.id}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.05 }}
+                whileHover={{ y: -4 }}
+                className="bg-bg-card border border-border rounded-2xl p-6 hover:border-primary/30 transition-colors group"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-primary/20 to-secondary/20 flex items-center justify-center">
+                    <LayoutDashboard size={24} className="text-primary" />
+                  </div>
+                  <span className="px-2 py-1 bg-green-500/10 text-green-400 text-xs rounded-lg border border-green-500/20">
+                    {item.price > 0 ? `${item.price} crédits` : 'Gratuit'}
                   </span>
                 </div>
-                <button className="px-4 py-2 bg-primary/10 text-primary text-sm font-medium rounded-lg hover:bg-primary/20 transition-colors">
-                  Utiliser
-                </button>
-              </div>
-            </motion.div>
-          ))}
-        </div>
+
+                <h3 className="font-semibold text-lg mb-2 group-hover:text-primary transition-colors">
+                  {item.title}
+                </h3>
+                <p className="text-text-muted text-sm mb-4">{item.description}</p>
+
+                <div className="flex items-center justify-between pt-4 border-t border-border">
+                  <div className="flex items-center gap-3 text-sm text-text-muted">
+                    <span className="flex items-center gap-1">
+                      <Star size={14} className="text-yellow-400" />
+                      {item.rating}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Download size={14} />
+                      {item.downloads}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleUse(item)}
+                    disabled={downloadingId === item.id}
+                    className="px-4 py-2 bg-primary/10 text-primary text-sm font-medium rounded-lg hover:bg-primary/20 transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {downloadingId === item.id && <Loader2 size={14} className="animate-spin" />}
+                    Utiliser
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
       </motion.div>
     </div>
   )
-              }
+}
