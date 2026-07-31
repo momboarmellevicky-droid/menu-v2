@@ -77,4 +77,85 @@ export default function LoginPage() {
 
           {!isLogin && (
             <div>
+              <div className="relative">
+                <Sparkles size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Jean Dupont"
+                  required
+                  className="w-full bg-bg border border-border rounded-xl pl-10 pr-4 py-3 text-white placeholder-text-muted outline-none focus:border-primary transition-colors"
+                />
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Email</label>
+            <div className="relative">
+              <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="vous@exemple.com"
+                required
+                className="w-full bg-bg border border-border rounded-xl pl-10 pr-4 py-3 text-white placeholder-text-muted outline-none focus:border-primary transition-colors"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Mot de passe</label>
+            <div className="relative">
+              <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                minLength={6}
+                className="w-full bg-bg border border-border rounded-xl pl-10 pr-12 py-3 text-white placeholder-text-muted outline-none focus:border-primary transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-white"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-white font-semibold rounded-xl hover:shadow-[0_0_30px_rgba(124,58,237,0.4)] transition-shadow disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <>
+                {isLogin ? 'Se connecter' : 'Créer mon compte'}
+                <ArrowRight size={18} />
+              </>
+            )}
+          </button>
+        </form>
+
+        <p className="text-center mt-6 text-sm text-text-muted">
+          {isLogin ? "Pas encore de compte ?" : "Déjà un compte ?"}{' '}
+          <button
+            onClick={() => { setIsLogin(!isLogin); setError(null); setInfo(null) }}
+            className="text-primary hover:underline font-medium"
+          >
+            {isLogin ? 'Créer un compte' : 'Se connecter'}
+          </button>
+        </p>
+      </motion.div>
+    </div>
+  )
+}
               <label className="block text-sm font-medium mb-2">Nom complet</label>
