@@ -26,7 +26,7 @@ export default function GeneratePage() {
   const [prompt, setPrompt] = useState('')
   const [architecture, setArchitecture] = useState('frontend')
   const [exportFormat, setExportFormat] = useState<ExportFormat>('react')
-  const { isListening, transcript, startListening, stopListening } = useVoiceInput()
+  const { isListening, transcript, startListening, stopListening, error: voiceError } = useVoiceInput()
   const { isGenerating, progress, agents, currentCode, error, generate, generateFullStack } = useCodeGeneration()
 
   const handleSubmit = async () => {
@@ -46,7 +46,6 @@ export default function GeneratePage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-bold mb-1">
@@ -59,7 +58,6 @@ export default function GeneratePage() {
           <MemoryBadge />
         </div>
 
-        {/* Architecture Selector */}
         <div className="grid grid-cols-3 gap-3 mb-6">
           {architectureModes.map((mode) => (
             <button
@@ -78,7 +76,6 @@ export default function GeneratePage() {
           ))}
         </div>
 
-        {/* Input */}
         <div className="bg-bg-card/80 backdrop-blur-sm border border-border rounded-2xl p-2 mb-8">
           <div className="flex gap-2">
             <input
@@ -107,9 +104,11 @@ export default function GeneratePage() {
               Générer
             </button>
           </div>
+          {voiceError && (
+            <p className="text-xs text-red-400 px-4 pb-2">{voiceError}</p>
+          )}
         </div>
 
-        {/* Export Format */}
         {!isGenerating && !currentCode && (
           <div className="flex items-center gap-3 mb-8">
             <span className="text-sm text-text-muted">Format d'export :</span>
@@ -129,7 +128,6 @@ export default function GeneratePage() {
           </div>
         )}
 
-        {/* Error */}
         <AnimatePresence>
           {error && (
             <motion.div
@@ -143,7 +141,6 @@ export default function GeneratePage() {
           )}
         </AnimatePresence>
 
-        {/* Agents */}
         <AnimatePresence>
           {isGenerating && (
             <motion.div
@@ -153,52 +150,3 @@ export default function GeneratePage() {
               className="bg-bg-card/80 backdrop-blur-sm border border-border rounded-2xl p-6 mb-8"
             >
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <Sparkles size={18} className="text-primary animate-pulse" />
-                  Agents IA en action — {architecture === 'fullstack' ? 'Mode Full Stack' : 'Mode Frontend'}
-                </h3>
-                <span className="text-sm text-text-muted font-mono">{progress}%</span>
-              </div>
-              <div className="h-1.5 bg-border rounded-full mb-6 overflow-hidden">
-                <motion.div
-                  className="h-full bg-gradient-to-r from-secondary to-primary rounded-full"
-                  animate={{ width: `${progress}%` }}
-                  transition={{ duration: 0.3 }}
-                />
-              </div>
-              <AgentStatus agents={agents} />
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Résultat */}
-        <AnimatePresence>
-          {currentCode && !isGenerating && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-4"
-            >
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-lg">Code généré</h3>
-                <div className="flex gap-2">
-                  <span className="px-3 py-1 bg-primary/10 text-primary text-xs rounded-lg border border-primary/20">
-                    {currentCode.framework}
-                  </span>
-                  <span className="px-3 py-1 bg-green-500/10 text-green-400 text-xs rounded-lg border border-green-500/20">
-                    Vérifié
-                  </span>
-                </div>
-              </div>
-              <CodeBlock 
-                code={currentCode.code} 
-                language={currentCode.language} 
-                filename={`component.${currentCode.language}`}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
-    </div>
-  )
-}
