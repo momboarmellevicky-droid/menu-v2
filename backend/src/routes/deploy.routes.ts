@@ -15,9 +15,9 @@ router.post('/', authenticateUser, async (req, res) => {
 
     const deployment = await deployProject(projectId, platform)
     res.json(deployment)
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Erreur deploy:', error)
-    res.status(500).json({ error: 'Erreur déploiement' })
+    res.status(500).json({ error: error.message || 'Erreur déploiement' })
   }
 })
 
