@@ -28,6 +28,8 @@ export function useVoiceInput(): UseVoiceInputReturn {
     }
     const recognition = new SpeechRecognitionCtor()
 
+    setTranscript('')
+
     recognition.lang = 'fr-FR'
     recognition.continuous = true
     recognition.interimResults = true
@@ -45,7 +47,7 @@ export function useVoiceInput(): UseVoiceInputReturn {
         }
       }
       if (finalTranscript) {
-        setTranscript(prev => prev + ' ' + finalTranscript)
+        setTranscript(prev => (prev ? prev + ' ' : '') + finalTranscript)
       }
     }
 
