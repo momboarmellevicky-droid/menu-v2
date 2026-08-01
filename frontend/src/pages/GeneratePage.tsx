@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Send, Copy, Check, Download, Sparkles, Mic, Layers, Smartphone, Globe, Database } from 'lucide-react'
 import VoiceButton from '../components/ui/VoiceButton'
@@ -26,11 +26,22 @@ export default function GeneratePage() {
   const [prompt, setPrompt] = useState('')
   const [architecture, setArchitecture] = useState('frontend')
   const [exportFormat, setExportFormat] = useState<ExportFormat>('react')
-  const { isListening, transcript, startListening, stopListening, error: voiceError } = useVoiceInput()
+  const { isListening, transcript, startListening, stopListening, resetTranscript, error: voiceError } = useVoiceInput()
   const { isGenerating, progress, agents, currentCode, error, generate, generateFullStack } = useCodeGeneration()
 
+  useEffect(() => {
+    if (transcript) {
+      setPrompt(prev => (isListening ? transcript : prev))
+    }
+  }, [transcript, isListening])
+
+  const handleStartListening = () => {
+    resetTranscript()
+    startListening()
+  }
+
   const handleSubmit = async () => {
-    const text = prompt || transcript
+    const text = prompt
     if (!text.trim()) return
 
     if (architecture === 'fullstack') {
@@ -57,7 +68,6 @@ export default function GeneratePage() {
           </div>
           <MemoryBadge />
         </div>
-
         <div className="grid grid-cols-3 gap-3 mb-6">
           {architectureModes.map((mode) => (
             <button
@@ -80,7 +90,7 @@ export default function GeneratePage() {
           <div className="flex gap-2">
             <input
               type="text"
-              value={prompt || transcript}
+              value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
               placeholder="Ex: Crée une application de gestion pour mon restaurant avec tableau de bord..."
@@ -88,12 +98,12 @@ export default function GeneratePage() {
             />
             <VoiceButton
               isListening={isListening}
-              onStart={startListening}
+              onStart={handleStartListening}
               onStop={stopListening}
             />
             <button
               onClick={handleSubmit}
-              disabled={isGenerating || (!prompt.trim() && !transcript.trim())}
+              disabled={isGenerating || !prompt.trim()}
               className="px-6 py-3 bg-gradient-to-r from-primary to-secondary text-white font-semibold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 transition-transform flex items-center gap-2"
             >
               {isGenerating ? (
@@ -127,7 +137,6 @@ export default function GeneratePage() {
             ))}
           </div>
         )}
-
         <AnimatePresence>
           {error && (
             <motion.div
