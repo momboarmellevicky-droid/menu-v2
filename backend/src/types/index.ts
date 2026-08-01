@@ -114,10 +114,22 @@ export interface GenerationResult {
   timestamp: string
 }
 
+export interface DiagnosticEntry {
+  id: string
+  service: string
+  location: string
+  category: 'security' | 'accessibility' | 'performance' | 'quality' | 'dependency'
+  severity: 'critical' | 'warning' | 'info'
+  description: string
+  recommendation: string
+  autoFixed: boolean
+}
+
 export interface RepairResult {
   fixed: boolean
   originalCode: string
   fixedCode: string
   errors: string[]
   warnings: string[]
-}
+  diagnostics: DiagnosticEntry[]
+  }
