@@ -37,7 +37,9 @@ export function useVoiceInput(): UseVoiceInputReturn {
     recognition.onstart = () => {
       setIsListening(true)
       setError(null)
-    }recognition.onresult = (event: SpeechRecognitionEvent) => {
+    }
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
       let finalTranscript = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
         if (event.results[i].isFinal) {
