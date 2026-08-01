@@ -49,8 +49,9 @@ export async function generateCode(req: Request, res: Response) {
     // Réparation automatique
     const repair = await repairCode(generatedCode, framework === 'react' ? 'tsx' : framework)
 
-    // Sauvegarder dans Supabase
-    const { data: codeRecord, error } = await supabaseAdmin
+    // Sauvegarder dans Supabase (avec timeout pour éviter un blocage silencieux)
+    logger.info('Insertion Supabase generated_codes...')
+    const insertPromise = supabaseAdmin
       .from('generated_codes')
       .insert({
         project_id: projectId,
@@ -67,6 +68,13 @@ export async function generateCode(req: Request, res: Response) {
       })
       .select()
       .single()
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Timeout insertion Supabase (15s)')), 15000)
+    )
+
+    const { data: codeRecord, error } = await Promise.race([insertPromise, timeoutPromise]) as any
+    logger.info('Insertion Supabase generated_codes: OK')
 
     if (error) throw error
 
