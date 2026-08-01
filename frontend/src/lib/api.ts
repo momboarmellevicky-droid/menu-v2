@@ -95,7 +95,7 @@ class ApiClient {
       code: string
       id: string
       agents: { name: string; status: string }[]
-      repair: { fixed: boolean; warnings: string[]; errors: string[] }
+      repair: { fixed: boolean; warnings: string[]; errors: string[]; diagnostics: import('../types').DiagnosticEntry[] }
       creditsRemaining: number
     }>('/generate', {
       method: 'POST',
