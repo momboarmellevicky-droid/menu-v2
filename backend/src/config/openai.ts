@@ -1,8 +1,11 @@
 import OpenAI from 'openai'
 import Anthropic from '@anthropic-ai/sdk'
 
-export const openai = process.env.OPENAI_API_KEY
-  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+export const openai = process.env.GROQ_API_KEY
+  ? new OpenAI({
+      apiKey: process.env.GROQ_API_KEY,
+      baseURL: 'https://api.groq.com/openai/v1',
+    })
   : null
 
 export const anthropic = new Anthropic({
@@ -12,7 +15,7 @@ export const anthropic = new Anthropic({
 // Configuration des modèles
 export const AI_CONFIG = {
   defaultModel: 'claude-3-sonnet-20240229',
-  fallbackModel: 'gpt-4-turbo-preview',
+  fallbackModel: 'llama-3.3-70b-versatile',
   maxTokens: 4000,
   temperature: 0.2,
 } as const
