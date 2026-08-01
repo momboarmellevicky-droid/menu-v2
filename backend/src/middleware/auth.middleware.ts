@@ -1,9 +1,6 @@
 import { Request, Response, NextFunction } from 'express'
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '../config/supabase'
 import { logger } from '../utils/logger'
-
-const supabaseUrl = process.env.SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY!
 
 export async function authenticateUser(req: Request, res: Response, next: NextFunction) {
   try {
@@ -15,19 +12,14 @@ return res.status(401).json({ error: "Token d'authentification manquant" })
 
     const token = authHeader.split(' ')[1]
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false }
-    })
-
-    const { data: { user }, error } = await supabase.auth.getUser(token)
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
 
     if (error || !user) {
       logger.warn("Tentative d'accès avec token invalide")
       return res.status(401).json({ error: 'Token invalide ou expiré' })
     }
 
-    // Récupérer le profil avec les crédits
-    const { data: profile } = await supabase
+    const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('*')
       .eq('id', user.id)
@@ -71,7 +63,6 @@ export function requireCredits(minCredits: number = 1) {
   }
 }
 
-// Types pour Express
 declare global {
   namespace Express {
     interface Request {
