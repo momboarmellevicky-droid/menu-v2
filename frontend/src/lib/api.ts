@@ -5,7 +5,6 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL!
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY!
 
-// Client Supabase
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
@@ -13,7 +12,6 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   }
 })
 
-// Client API avec auth
 class ApiClient {
   private async getToken(): Promise<string | null> {
     const { data } = await supabase.auth.getSession()
@@ -34,13 +32,11 @@ class ApiClient {
 
     if (!response.ok) {
       const error = await response.json()
-      throw new Error(error.error || `HTTP ${response.status}`)
+      throw new Error(error.reason ? `${error.error} (${error.reason})` : error.error || `HTTP ${response.status}`)
     }
-
     return response.json()
   }
 
-  // Auth
   async signUp(email: string, password: string, fullName: string) {
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -93,7 +89,6 @@ class ApiClient {
     if (error) throw error
   }
 
-  // Code Generation
   async generateCode(prompt: string, framework: string = 'react', projectId?: string) {
     return this.request<{
       success: boolean
@@ -134,7 +129,6 @@ class ApiClient {
     })
   }
 
-  // Projects
   async getProjects(): Promise<Project[]> {
     return this.request('/projects')
   }
@@ -154,7 +148,6 @@ class ApiClient {
     return this.request(`/projects/${id}`, { method: 'DELETE' })
   }
 
-  // Marketplace
   async getMarketplaceItems(category?: string, search?: string): Promise<MarketplaceItem[]> {
     const params = new URLSearchParams()
     if (category) params.append('category', category)
@@ -166,7 +159,6 @@ class ApiClient {
     return this.request<{ code: string }>(`/marketplace/${id}/download`, { method: 'POST' })
   }
 
-  // Deploy
   async deploy(projectId: string, platform: string) {
     return this.request('/deploy', {
       method: 'POST',
@@ -178,7 +170,6 @@ class ApiClient {
     return this.request(`/deploy/${projectId}`)
   }
 
-  // Team
   async getTeamMembers(projectId: string) {
     return this.request(`/team/${projectId}`)
   }
@@ -194,7 +185,6 @@ class ApiClient {
     return this.request(`/team/${projectId}/${userId}`, { method: 'DELETE' })
   }
 
-  // Auth profile
   async getProfile() {
     return this.request('/auth/profile')
   }
