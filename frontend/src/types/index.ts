@@ -7,6 +7,17 @@ export interface User {
   credits: number
 }
 
+export interface DiagnosticEntry {
+  id: string
+  service: string
+  location: string
+  category: 'security' | 'accessibility' | 'performance' | 'quality' | 'dependency'
+  severity: 'critical' | 'warning' | 'info'
+  description: string
+  recommendation: string
+  autoFixed: boolean
+}
+
 export interface GeneratedCode {
   id: string
   prompt: string
@@ -15,6 +26,7 @@ export interface GeneratedCode {
   framework: 'react' | 'html' | 'vue' | 'react-native'
   createdAt: Date
   projectId?: string
+  diagnostics?: DiagnosticEntry[]
 }
 
 export interface Project {
