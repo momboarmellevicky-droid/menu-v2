@@ -39,6 +39,7 @@ export function useVoiceInput(): UseVoiceInputReturn {
       setError(null)
     }
 
+    let lastChunk = ''
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let finalTranscript = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -46,8 +47,10 @@ export function useVoiceInput(): UseVoiceInputReturn {
           finalTranscript += event.results[i][0].transcript
         }
       }
-      if (finalTranscript) {
-        setTranscript(prev => (prev ? prev + ' ' : '') + finalTranscript)
+      const cleaned = finalTranscript.trim()
+      if (cleaned && cleaned !== lastChunk) {
+        lastChunk = cleaned
+        setTranscript(prev => (prev ? prev + ' ' : '') + cleaned)
       }
     }
 
