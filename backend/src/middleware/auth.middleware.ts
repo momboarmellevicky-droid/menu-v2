@@ -15,8 +15,8 @@ return res.status(401).json({ error: "Token d'authentification manquant" })
     const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
 
     if (error || !user) {
-      logger.warn("Tentative d'accès avec token invalide")
-      return res.status(401).json({ error: 'Token invalide ou expiré' })
+      logger.warn(`Tentative d'accès avec token invalide: ${error?.message || 'utilisateur introuvable'}`)
+      return res.status(401).json({ error: 'Token invalide ou expiré', reason: error?.message })
     }
 
     const { data: profile } = await supabaseAdmin
