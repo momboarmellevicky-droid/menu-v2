@@ -23,10 +23,6 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
   const { addToHistory, setCurrentCode, currentCode } = useCodeStore()
   const progressTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Anime la progression pendant l'appel réel au backend (le backend ne renvoie
-  // le détail par agent qu'à la toute fin, on ne peut donc pas suivre chaque
-  // agent en temps réel sans SSE — on avance visuellement jusqu'à 90% en
-  // attendant la vraie réponse, puis on complète avec les vrais logs d'agents).
   const startFakeProgress = useCallback(() => {
     setAgents(AGENT_NAMES.map((name, i) => ({ name, status: i === 0 ? 'working' : 'waiting', progress: 0 })))
     setProgress(0)
@@ -60,8 +56,6 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
     startFakeProgress()
 
     try {
-      // Appel réel au backend MÉNU (pipeline multi-agents + Claude/OpenAI + Supabase).
-      // Plus aucun code simulé : le code renvoyé vient de ai.service.ts côté serveur.
       const result = await api.generateCode(prompt, framework, projectId)
 
       const code: GeneratedCode = {
@@ -72,6 +66,7 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
         framework: framework as 'react' | 'html' | 'vue' | 'react-native',
         createdAt: new Date(),
         projectId,
+        diagnostics: result.repair?.diagnostics || [],
       }
 
       finishProgress(result.agents)
@@ -93,8 +88,6 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
     startFakeProgress()
 
     try {
-      // Appel réel au backend : crée le projet en base, génère frontend + backend +
-      // database, décrémente les crédits. Plus aucune donnée simulée.
       const result = await api.generateFullStack(prompt)
 
       const frontend: GeneratedCode = {
@@ -141,4 +134,4 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
   }, [startFakeProgress, finishProgress, setCurrentCode, addToHistory])
 
   return { isGenerating, progress, agents, currentCode, error, generate, generateFullStack }
-}
+      }
