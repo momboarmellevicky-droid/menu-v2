@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Send, Copy, Check, Download, Sparkles, Mic, Layers, Smartphone, Globe, Database } from 'lucide-react'
+import { Send, Copy, Check, Download, Sparkles, Mic, Layers, Smartphone, Globe, Database, ShieldAlert, ShieldCheck, AlertTriangle, Info } from 'lucide-react'
 import VoiceButton from '../components/ui/VoiceButton'
 import AgentStatus from '../components/ui/AgentStatus'
 import CodeBlock from '../components/ui/CodeBlock'
@@ -21,6 +21,12 @@ const architectureModes = [
   { id: 'fullstack', label: 'Full Stack', icon: Layers, desc: 'Frontend + Backend + DB' },
   { id: 'mobile', label: 'Mobile', icon: Smartphone, desc: 'App React Native' },
 ]
+
+const severityStyles: Record<string, { icon: typeof ShieldAlert; color: string; bg: string; border: string; label: string }> = {
+  critical: { icon: ShieldAlert, color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/30', label: 'Critique' },
+  warning: { icon: AlertTriangle, color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', label: 'Avertissement' },
+  info: { icon: Info, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30', label: 'Info' },
+}
 
 export default function GeneratePage() {
   const [prompt, setPrompt] = useState('')
@@ -50,6 +56,10 @@ export default function GeneratePage() {
       await generate(text, exportFormat)
     }
   }
+
+  const diagnostics = currentCode?.diagnostics || []
+  const criticalCount = diagnostics.filter(d => d.severity === 'critical').length
+  const warningCount = diagnostics.filter(d => d.severity === 'warning').length
 
   return (
     <div className="min-h-screen pt-24 px-4 pb-10 max-w-6xl mx-auto relative z-10">
@@ -190,11 +200,71 @@ export default function GeneratePage() {
                   <span className="px-3 py-1 bg-primary/10 text-primary text-xs rounded-lg border border-primary/20">
                     {currentCode.framework}
                   </span>
-                  <span className="px-3 py-1 bg-green-500/10 text-green-400 text-xs rounded-lg border border-green-500/20">
-                    Vérifié
-                  </span>
+                  {diagnostics.length === 0 ? (
+                    <span className="px-3 py-1 bg-green-500/10 text-green-400 text-xs rounded-lg border border-green-500/20 flex items-center gap-1">
+                      <ShieldCheck size={14} />
+                      Aucune faille détectée
+                    </span>
+                  ) : (
+                    <span className="px-3 py-1 bg-orange-500/10 text-orange-400 text-xs rounded-lg border border-orange-500/20 flex items-center gap-1">
+                      <ShieldAlert size={14} />
+                      {diagnostics.length} faille(s) détectée(s)
+                    </span>
+                  )}
                 </div>
               </div>
+
+              {diagnostics.length > 0 && (
+                <div className="bg-bg-card/80 backdrop-blur-sm border border-border rounded-2xl p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-semibold text-sm flex items-center gap-2">
+                      <ShieldAlert size={16} className="text-orange-400" />
+                      Rapport de failles détectées
+                    </h4>
+                    <div className="flex gap-2 text-xs">
+                      {criticalCount > 0 && (
+                        <span className="text-red-400">{criticalCount} critique(s)</span>
+                      )}
+                      {warningCount > 0 && (
+                        <span className="text-yellow-400">{warningCount} avertissement(s)</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {diagnostics.map((diag) => {
+                      const style = severityStyles[diag.severity] || severityStyles.info
+                      const Icon = style.icon
+                      return (
+                        <div
+                          key={diag.id}
+                          className={`rounded-xl border p-3 ${style.bg} ${style.border}`}
+                        >
+                          <div className="flex items-start gap-2">
+                            <Icon size={16} className={`${style.color} mt-0.5 shrink-0`} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <span className={`text-xs font-semibold ${style.color}`}>{style.label}</span>
+                                <span className="text-xs text-text-muted font-mono">{diag.service}</span>
+                                <span className="text-xs text-text-muted">→ {diag.location}</span>
+                                {diag.autoFixed && (
+                                  <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20">
+                                    Corrigé automatiquement
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm text-white/90">{diag.description}</p>
+                              <p className="text-xs text-text-muted mt-1">
+                                <span className="font-semibold">Recommandation :</span> {diag.recommendation}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
               <CodeBlock 
                 code={currentCode.code} 
                 language={currentCode.language} 
@@ -206,4 +276,4 @@ export default function GeneratePage() {
       </motion.div>
     </div>
   )
-}
+              }
