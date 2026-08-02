@@ -115,6 +115,21 @@ class ApiClient {
     })
   }
 
+  async editCode(projectId: string, instruction: string) {
+    return this.request<{
+      success: boolean
+      code: string
+      files: Record<string, string>
+      id: string
+      projectId: string
+      repair: { fixed: boolean; warnings: string[]; errors: string[]; diagnostics: import('../types').DiagnosticEntry[] }
+      creditsRemaining: number
+    }>('/generate/edit', {
+      method: 'POST',
+      body: JSON.stringify({ projectId, instruction }),
+    })
+  }
+
   async generateFullStack(prompt: string) {
     return this.request<{
       success: boolean
