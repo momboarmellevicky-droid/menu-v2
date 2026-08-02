@@ -21,7 +21,7 @@ export const gemini = process.env.GEMINI_API_KEY
 export const AI_CONFIG = {
   defaultModel: 'claude-3-sonnet-20240229',
   fallbackModel: 'llama-3.3-70b-versatile',
-  geminiModel: 'gemini-1.5-flash',
+  geminiModel: 'gemini-2.5-flash',
   maxTokens: 4000,
   temperature: 0.2,
 } as const
