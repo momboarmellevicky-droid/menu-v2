@@ -12,6 +12,7 @@ interface UseCodeGenerationReturn {
   errorDetails: ExplainedError | null
   generate: (prompt: string, framework?: string, projectId?: string) => Promise<void>
   generateFullStack: (prompt: string) => Promise<void>
+  editCurrentProject: (instruction: string) => Promise<void>
 }
 
 const AGENT_NAMES = ['Analyste', 'Architecte', 'Designer', 'Développeur', 'Testeur', 'Optimiseur']
@@ -39,6 +40,17 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
         idx === activeIdx ? { ...a, status: 'working', progress: (pct % (90 / AGENT_NAMES.length)) * AGENT_NAMES.length } :
         a
       )))
+    }, 250)
+  }, [])
+
+  const startSimpleProgress = useCallback(() => {
+    setAgents([{ name: 'Éditeur', status: 'working', progress: 0 }])
+    setProgress(0)
+    let step = 0
+    progressTimer.current = setInterval(() => {
+      step += 1
+      const pct = Math.min(90, step * 8)
+      setProgress(pct)
     }, 250)
   }, [])
 
@@ -145,5 +157,37 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
     }
   }, [startFakeProgress, finishProgress, setCurrentCode, addToHistory])
 
-  return { isGenerating, progress, agents, currentCode, error, errorDetails, generate, generateFullStack }
-}
+  const editCurrentProject = useCallback(async (instruction: string) => {
+    if (!currentCode?.projectId) return
+    setIsGenerating(true)
+    setError(null)
+    setErrorDetails(null)
+    startSimpleProgress()
+
+    try {
+      const result = await api.editCode(currentCode.projectId, instruction)
+
+      const code: GeneratedCode = {
+        id: result.id,
+        prompt: instruction,
+        code: result.code,
+        files: result.files,
+        language: currentCode.language,
+        framework: currentCode.framework,
+        createdAt: new Date(),
+        projectId: result.projectId,
+        diagnostics: result.repair?.diagnostics || [],
+      }
+
+      finishProgress([{ name: 'Éditeur', status: 'completed' }])
+      setCurrentCode(code)
+      addToHistory(code)
+    } catch (err) {
+      handleGenerationError(err)
+    } finally {
+      setIsGenerating(false)
+    }
+  }, [currentCode, startSimpleProgress, finishProgress, setCurrentCode, addToHistory])
+
+  return { isGenerating, progress, agents, currentCode, error, errorDetails, generate, generateFullStack, editCurrentProject }
+                                             }
