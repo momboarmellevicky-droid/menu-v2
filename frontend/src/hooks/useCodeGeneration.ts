@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { useCodeStore } from '../stores/codeStore'
-import { GeneratedCode } from '../types'
-import { api } from '../lib/api'
+import { GeneratedCode, ExplainedError } from '../types'
+import { api, ApiError } from '../lib/api'
 
 interface UseCodeGenerationReturn {
   isGenerating: boolean
@@ -9,6 +9,7 @@ interface UseCodeGenerationReturn {
   agents: { name: string; status: string; progress: number }[]
   currentCode: GeneratedCode | null
   error: string | null
+  errorDetails: ExplainedError | null
   generate: (prompt: string, framework?: string, projectId?: string) => Promise<void>
   generateFullStack: (prompt: string) => Promise<void>
 }
@@ -20,6 +21,7 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
   const [progress, setProgress] = useState(0)
   const [agents, setAgents] = useState<{ name: string; status: string; progress: number }[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [errorDetails, setErrorDetails] = useState<ExplainedError | null>(null)
   const { addToHistory, setCurrentCode, currentCode } = useCodeStore()
   const progressTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -50,9 +52,23 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
     }
   }, [])
 
+  const handleGenerationError = (err: unknown) => {
+    if (progressTimer.current) clearInterval(progressTimer.current)
+    setProgress(0)
+    setAgents([])
+    if (err instanceof ApiError) {
+      setError(err.message)
+      setErrorDetails(err.details || null)
+    } else {
+      setError(err instanceof Error ? err.message : 'Erreur de génération')
+      setErrorDetails(null)
+    }
+  }
+
   const generate = useCallback(async (prompt: string, framework: string = 'react', projectId?: string) => {
     setIsGenerating(true)
     setError(null)
+    setErrorDetails(null)
     startFakeProgress()
 
     try {
@@ -74,10 +90,7 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
       setCurrentCode(code)
       addToHistory(code)
     } catch (err) {
-      if (progressTimer.current) clearInterval(progressTimer.current)
-      setProgress(0)
-      setAgents([])
-      setError(err instanceof Error ? err.message : 'Erreur de génération')
+      handleGenerationError(err)
     } finally {
       setIsGenerating(false)
     }
@@ -86,6 +99,7 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
   const generateFullStack = useCallback(async (prompt: string) => {
     setIsGenerating(true)
     setError(null)
+    setErrorDetails(null)
     startFakeProgress()
 
     try {
@@ -125,14 +139,11 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
       addToHistory(backend)
       addToHistory(database)
     } catch (err) {
-      if (progressTimer.current) clearInterval(progressTimer.current)
-      setProgress(0)
-      setAgents([])
-      setError(err instanceof Error ? err.message : 'Erreur de génération')
+      handleGenerationError(err)
     } finally {
       setIsGenerating(false)
     }
   }, [startFakeProgress, finishProgress, setCurrentCode, addToHistory])
 
-  return { isGenerating, progress, agents, currentCode, error, generate, generateFullStack }
-                               }
+  return { isGenerating, progress, agents, currentCode, error, errorDetails, generate, generateFullStack }
+}
