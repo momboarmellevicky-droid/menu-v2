@@ -1,11 +1,11 @@
 import { Request, Response } from 'express'
-import { runMultiAgentPipeline, generateFullStack, extractCodeBlock, extractFilesJson } from '../services/ai.service'
+import { runMultiAgentPipeline, generateFullStack, extractCodeBlock, extractFilesJson, editProject } from '../services/ai.service'
 import { explainError } from '../services/errorExplainer.service'
 import { repairCode } from '../services/codeRepair.service'
 import { getProjectMemory, updateProjectMemory, addComponentToMemory } from '../services/memory.service'
 import { supabaseAdmin } from '../config/supabase'
 import { logger } from '../utils/logger'
-import { generateCodeSchema } from '../utils/validators'
+import { generateCodeSchema, editCodeSchema } from '../utils/validators'
 import { AppError } from '../middleware/error.middleware'
 
 export async function generateCode(req: Request, res: Response) {
@@ -180,6 +180,111 @@ export async function generateCode(req: Request, res: Response) {
   }
 }
 
+export async function editCode(req: Request, res: Response) {
+  try {
+    const { projectId, instruction } = editCodeSchema.parse(req.body)
+    const userId = req.user!.id
+
+    const { data: project } = await supabaseAdmin
+      .from('projects')
+      .select('id, user_id')
+      .eq('id', projectId)
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    if (!project) {
+      throw new AppError('Projet introuvable ou vous ne le possédez pas', 404)
+    }
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('credits')
+      .eq('id', userId)
+      .single()
+
+    if (!profile || profile.credits < 1) {
+      throw new AppError('Crédits insuffisants. Passez au plan Pro.', 403)
+    }
+
+    const { data: latestCode, error: latestError } = await supabaseAdmin
+      .from('generated_codes')
+      .select('files, code, language, framework, prompt')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (latestError) throw latestError
+    if (!latestCode) {
+      throw new AppError('Aucun code existant à modifier pour ce projet. Générez-le d\'abord.', 400)
+    }
+
+    const existingFiles: Record<string, string> =
+      latestCode.files && Object.keys(latestCode.files).length > 0
+        ? latestCode.files
+        : { '/src/App.tsx': latestCode.code }
+
+    const { files: editedFiles, raw } = await editProject(existingFiles, instruction)
+
+    const mainKey = editedFiles['/src/App.tsx'] ? '/src/App.tsx' : Object.keys(editedFiles)[0]
+    const repair = await repairCode(editedFiles[mainKey], latestCode.language === 'tsx' ? 'tsx' : latestCode.language)
+    editedFiles[mainKey] = repair.fixedCode
+
+    const { data: codeRecord, error: insertError } = await supabaseAdmin
+      .from('generated_codes')
+      .insert({
+        project_id: projectId,
+        user_id: userId,
+        prompt: `Édition: ${instruction.slice(0, 100)}`,
+        code: repair.fixedCode,
+        files: editedFiles,
+        language: latestCode.language,
+        framework: latestCode.framework,
+        agent_logs: [{ agent: raw.agent, status: raw.status, timestamp: raw.timestamp }],
+      })
+      .select()
+      .single()
+
+    if (insertError) throw insertError
+
+    await supabaseAdmin
+      .from('profiles')
+      .update({ credits: profile.credits - 1 })
+      .eq('id', userId)
+
+    await updateProjectMemory(projectId, {
+      history: [{
+        id: crypto.randomUUID(),
+        type: 'edit',
+        description: `Édition: ${instruction.slice(0, 100)}`,
+        timestamp: new Date().toISOString(),
+        author: userId,
+      }]
+    })
+
+    res.json({
+      success: true,
+      code: repair.fixedCode,
+      files: editedFiles,
+      id: codeRecord.id,
+      projectId,
+      repair: {
+        fixed: repair.fixed,
+        warnings: repair.warnings,
+        errors: repair.errors,
+      },
+      creditsRemaining: profile.credits - 1,
+    })
+
+  } catch (error) {
+    logger.error('Erreur édition:', error)
+    if (error instanceof AppError) throw error
+    const rawMessage = error instanceof Error ? error.message : 'Erreur inconnue'
+    const explained = explainError(rawMessage)
+    res.status(500).json({ error: "Erreur d'édition", details: explained })
+  }
+}
+
 export async function generateFullStackProject(req: Request, res: Response) {
   try {
     const { prompt } = req.body
@@ -189,7 +294,6 @@ export async function generateFullStackProject(req: Request, res: Response) {
       throw new AppError('Prompt requis', 400)
     }
 
-    // Vérifier les crédits (Full Stack = 3 crédits)
     const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('credits')
@@ -200,7 +304,6 @@ export async function generateFullStackProject(req: Request, res: Response) {
       throw new AppError('Crédits insuffisants pour Full Stack (3 requis)', 403)
     }
 
-    // Créer le projet
     const { data: project, error: projectError } = await supabaseAdmin
       .from('projects')
       .insert({
@@ -215,10 +318,8 @@ export async function generateFullStackProject(req: Request, res: Response) {
 
     if (projectError) throw projectError
 
-    // Générer le code Full Stack
     const result = await generateFullStack(prompt)
 
-    // Sauvegarder les résultats
     await supabaseAdmin.from('generated_codes').insert([
       {
         project_id: project.id,
@@ -246,13 +347,11 @@ export async function generateFullStackProject(req: Request, res: Response) {
       },
     ])
 
-    // Mettre à jour le statut
     await supabaseAdmin
       .from('projects')
       .update({ status: 'completed' })
       .eq('id', project.id)
 
-    // Décrémenter les crédits
     await supabaseAdmin
       .from('profiles')
       .update({ credits: profile.credits - 3 })
@@ -305,4 +404,4 @@ export async function generateVoiceCommand(req: Request, res: Response) {
 function extractComponentName(code: string): string {
   const match = code.match(/export\s+default\s+function\s+(\w+)/)
   return match?.[1] || 'GeneratedComponent'
-        }
+      }
