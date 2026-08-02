@@ -62,10 +62,11 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
         id: result.id,
         prompt,
         code: result.code,
+        files: result.files,
         language: framework === 'react' ? 'tsx' : framework,
         framework: framework as 'react' | 'html' | 'vue' | 'react-native',
         createdAt: new Date(),
-        projectId,
+        projectId: result.projectId || projectId,
         diagnostics: result.repair?.diagnostics || [],
       }
 
@@ -134,4 +135,4 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
   }, [startFakeProgress, finishProgress, setCurrentCode, addToHistory])
 
   return { isGenerating, progress, agents, currentCode, error, generate, generateFullStack }
-      }
+                               }
