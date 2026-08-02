@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Send, Copy, Check, Download, Sparkles, Mic, Layers, Smartphone, Globe, Database, ShieldAlert, ShieldCheck, AlertTriangle, Info } from 'lucide-react'
+import { Send, Copy, Check, Download, Sparkles, Mic, Layers, Smartphone, Globe, Database, ShieldAlert, ShieldCheck, AlertTriangle, Info, Rocket, ExternalLink, Loader2 } from 'lucide-react'
 import VoiceButton from '../components/ui/VoiceButton'
 import AgentStatus from '../components/ui/AgentStatus'
 import CodeBlock from '../components/ui/CodeBlock'
@@ -8,7 +9,9 @@ import LivePreview from '../components/ui/LivePreview'
 import MemoryBadge from '../components/ui/MemoryBadge'
 import { useCodeGeneration } from '../hooks/useCodeGeneration'
 import { useVoiceInput } from '../hooks/useVoiceInput'
-import { ExportFormat } from '../types'
+import { useCodeStore } from '../stores/codeStore'
+import { api } from '../lib/api'
+import { ExportFormat, GeneratedCode } from '../types'
 
 const exportFormats: { value: ExportFormat; label: string; icon: typeof Globe }[] = [
   { value: 'react', label: 'React', icon: Globe },
@@ -33,9 +36,46 @@ export default function GeneratePage() {
   const [prompt, setPrompt] = useState('')
   const [architecture, setArchitecture] = useState('frontend')
   const [view, setView] = useState<'preview' | 'code'>('preview')
+  const [selectedFile, setSelectedFile] = useState<string | null>(null)
+  const [deploying, setDeploying] = useState(false)
+  const [deployUrl, setDeployUrl] = useState<string | null>(null)
+  const [deployError, setDeployError] = useState<string | null>(null)
   const [exportFormat, setExportFormat] = useState<ExportFormat>('react')
   const { isListening, transcript, startListening, stopListening, resetTranscript, error: voiceError } = useVoiceInput()
-  const { isGenerating, progress, agents, currentCode, error, generate, generateFullStack } = useCodeGeneration()
+  const { isGenerating, progress, agents, currentCode, error, errorDetails, generate, generateFullStack } = useCodeGeneration()
+  const { setCurrentCode } = useCodeStore()
+  const [searchParams] = useSearchParams()
+  const [loadingProject, setLoadingProject] = useState(false)
+
+  useEffect(() => {
+    const projectId = searchParams.get('project')
+    if (!projectId) return
+
+    setLoadingProject(true)
+    api.getProject(projectId)
+      .then((project: any) => {
+        const codes = project.generated_codes || []
+        if (codes.length === 0) return
+        const latest = codes.sort(
+          (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )[0]
+
+        const reopened: GeneratedCode = {
+          id: latest.id,
+          prompt: latest.prompt,
+          code: latest.code,
+          files: latest.files,
+          language: latest.language,
+          framework: latest.framework,
+          createdAt: new Date(latest.created_at),
+          projectId: project.id,
+        }
+        setCurrentCode(reopened)
+      })
+      .catch(() => {})
+      .finally(() => setLoadingProject(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   useEffect(() => {
     if (transcript) {
@@ -52,10 +92,27 @@ export default function GeneratePage() {
     const text = prompt
     if (!text.trim()) return
 
+    setDeployUrl(null)
+    setDeployError(null)
+
     if (architecture === 'fullstack') {
       await generateFullStack(text)
     } else {
       await generate(text, exportFormat)
+    }
+  }
+
+  const handleDeploy = async () => {
+    if (!currentCode?.projectId) return
+    setDeploying(true)
+    setDeployError(null)
+    try {
+      const result = await api.deploy(currentCode.projectId, 'web') as { url: string }
+      setDeployUrl(result.url)
+    } catch (err) {
+      setDeployError(err instanceof Error ? err.message : 'Erreur de déploiement')
+    } finally {
+      setDeploying(false)
     }
   }
 
@@ -155,9 +212,28 @@ export default function GeneratePage() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-8 text-red-400 text-sm"
+              className="bg-red-500/10 border border-red-500/30 rounded-2xl p-5 mb-8 space-y-3"
             >
-              {error}
+              {errorDetails ? (
+                <>
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle size={20} className="text-red-400 shrink-0 mt-0.5" />
+                    <div>
+                      <h3 className="font-semibold text-red-400 text-sm mb-1">{errorDetails.title}</h3>
+                      <p className="text-sm text-white/80 leading-relaxed">{errorDetails.explanation}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 pt-3 border-t border-red-500/20">
+                    <Sparkles size={18} className="text-primary shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-semibold text-primary mb-1">Solution proposée</p>
+                      <p className="text-sm text-text-muted leading-relaxed">{errorDetails.suggestion}</p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-red-400">{error}</p>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -215,7 +291,7 @@ export default function GeneratePage() {
                     Code
                   </button>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center flex-wrap">
                   <span className="px-3 py-1 bg-primary/10 text-primary text-xs rounded-lg border border-primary/20">
                     {currentCode.framework}
                   </span>
@@ -230,8 +306,42 @@ export default function GeneratePage() {
                       {diagnostics.length} faille(s) détectée(s)
                     </span>
                   )}
+                  {deployUrl ? (
+                    <a
+                      href={deployUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1 bg-green-500/10 text-green-400 text-xs rounded-lg border border-green-500/20 flex items-center gap-1 hover:bg-green-500/20 transition-colors"
+                    >
+                      <ExternalLink size={14} />
+                      App en ligne
+                    </a>
+                  ) : (
+                    <button
+                      onClick={handleDeploy}
+                      disabled={deploying || !currentCode.projectId}
+                      className="px-3 py-1 bg-primary/10 text-primary text-xs rounded-lg border border-primary/20 flex items-center gap-1 hover:bg-primary/20 transition-colors disabled:opacity-50"
+                    >
+                      {deploying ? <Loader2 size={14} className="animate-spin" /> : <Rocket size={14} />}
+                      {deploying ? 'Déploiement...' : 'Déployer'}
+                    </button>
+                  )}
                 </div>
               </div>
+
+              {deployError && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-red-400 text-xs">
+                  {deployError}
+                </div>
+              )}
+              {deployUrl && (
+                <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 text-green-400 text-xs flex items-center justify-between gap-2">
+                  <span className="truncate">{deployUrl}</span>
+                  <a href={deployUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 underline">
+                    Ouvrir
+                  </a>
+                </div>
+              )}
 
               {diagnostics.length > 0 && (
                 <div className="bg-bg-card/80 backdrop-blur-sm border border-border rounded-2xl p-5 space-y-3">
@@ -285,13 +395,36 @@ export default function GeneratePage() {
               )}
 
               {view === 'preview' && (currentCode.framework === 'react' || currentCode.language === 'tsx') ? (
-                <LivePreview code={currentCode.code} />
+                <LivePreview code={currentCode.code} files={currentCode.files} />
               ) : (
-                <CodeBlock 
-                  code={currentCode.code} 
-                  language={currentCode.language} 
-                  filename={`component.${currentCode.language}`}
-                />
+                <div className="space-y-2">
+                  {currentCode.files && Object.keys(currentCode.files).length > 1 && (
+                    <div className="flex gap-1 flex-wrap">
+                      {Object.keys(currentCode.files).map((path) => (
+                        <button
+                          key={path}
+                          onClick={() => setSelectedFile(path)}
+                          className={`px-2.5 py-1 text-xs rounded-lg border font-mono transition-colors ${
+                            (selectedFile || Object.keys(currentCode.files!)[0]) === path
+                              ? 'border-primary/50 bg-primary/10 text-primary'
+                              : 'border-border bg-bg-card text-text-muted hover:border-primary/30'
+                          }`}
+                        >
+                          {path}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <CodeBlock
+                    code={
+                      currentCode.files && Object.keys(currentCode.files).length > 0
+                        ? currentCode.files[selectedFile || Object.keys(currentCode.files)[0]]
+                        : currentCode.code
+                    }
+                    language={currentCode.language}
+                    filename={selectedFile || `component.${currentCode.language}`}
+                  />
+                </div>
               )}
             </motion.div>
           )}
@@ -299,4 +432,4 @@ export default function GeneratePage() {
       </motion.div>
     </div>
   )
-              }
+}
