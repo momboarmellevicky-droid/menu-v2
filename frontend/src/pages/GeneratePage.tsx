@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Send, Copy, Check, Download, Sparkles, Mic, Layers, Smartphone, Globe, Database, ShieldAlert, ShieldCheck, AlertTriangle, Info, Rocket, ExternalLink, Loader2 } from 'lucide-react'
+import { Send, Copy, Check, Download, Sparkles, Mic, Layers, Smartphone, Globe, Database, ShieldAlert, ShieldCheck, AlertTriangle, Info, Rocket, ExternalLink, Loader2, Pencil, Plus } from 'lucide-react'
 import VoiceButton from '../components/ui/VoiceButton'
 import AgentStatus from '../components/ui/AgentStatus'
 import CodeBlock from '../components/ui/CodeBlock'
@@ -42,7 +42,7 @@ export default function GeneratePage() {
   const [deployError, setDeployError] = useState<string | null>(null)
   const [exportFormat, setExportFormat] = useState<ExportFormat>('react')
   const { isListening, transcript, startListening, stopListening, resetTranscript, error: voiceError } = useVoiceInput()
-  const { isGenerating, progress, agents, currentCode, error, errorDetails, generate, generateFullStack } = useCodeGeneration()
+  const { isGenerating, progress, agents, currentCode, error, errorDetails, generate, generateFullStack, editCurrentProject } = useCodeGeneration()
   const { setCurrentCode } = useCodeStore()
   const [searchParams] = useSearchParams()
   const [loadingProject, setLoadingProject] = useState(false)
@@ -95,11 +95,21 @@ export default function GeneratePage() {
     setDeployUrl(null)
     setDeployError(null)
 
-    if (architecture === 'fullstack') {
+    if (currentCode?.projectId) {
+      await editCurrentProject(text)
+      setPrompt('')
+    } else if (architecture === 'fullstack') {
       await generateFullStack(text)
     } else {
       await generate(text, exportFormat)
     }
+  }
+
+  const handleNewProject = () => {
+    setCurrentCode(null)
+    setPrompt('')
+    setDeployUrl(null)
+    setDeployError(null)
   }
 
   const handleDeploy = async () => {
@@ -155,6 +165,22 @@ export default function GeneratePage() {
           ))}
         </div>
 
+        {currentCode?.projectId && (
+          <div className="flex items-center justify-between mb-4 px-1">
+            <div className="flex items-center gap-2 text-xs text-primary">
+              <Pencil size={14} />
+              Mode édition — décris le changement à apporter au projet actuel
+            </div>
+            <button
+              onClick={handleNewProject}
+              className="flex items-center gap-1.5 text-xs text-text-muted hover:text-white transition-colors"
+            >
+              <Plus size={14} />
+              Nouveau projet
+            </button>
+          </div>
+        )}
+
         <div className="bg-bg-card/80 backdrop-blur-sm border border-border rounded-2xl p-2 mb-8">
           <div className="flex gap-2">
             <input
@@ -162,7 +188,11 @@ export default function GeneratePage() {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-              placeholder="Ex: Crée une application de gestion pour mon restaurant avec tableau de bord..."
+              placeholder={
+                currentCode?.projectId
+                  ? 'Ex: Change la couleur du bouton en bleu, ajoute un champ email...'
+                  : "Ex: Crée une application de gestion pour mon restaurant avec tableau de bord..."
+              }
               className="flex-1 bg-transparent px-4 py-3 text-white placeholder-text-muted outline-none text-base"
             />
             <VoiceButton
@@ -177,10 +207,12 @@ export default function GeneratePage() {
             >
               {isGenerating ? (
                 <Sparkles size={18} className="animate-spin" />
+              ) : currentCode?.projectId ? (
+                <Pencil size={18} />
               ) : (
                 <Send size={18} />
               )}
-              Générer
+              {currentCode?.projectId ? 'Modifier' : 'Générer'}
             </button>
           </div>
           {voiceError && (
@@ -404,32 +436,4 @@ export default function GeneratePage() {
                         <button
                           key={path}
                           onClick={() => setSelectedFile(path)}
-                          className={`px-2.5 py-1 text-xs rounded-lg border font-mono transition-colors ${
-                            (selectedFile || Object.keys(currentCode.files!)[0]) === path
-                              ? 'border-primary/50 bg-primary/10 text-primary'
-                              : 'border-border bg-bg-card text-text-muted hover:border-primary/30'
-                          }`}
-                        >
-                          {path}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <CodeBlock
-                    code={
-                      currentCode.files && Object.keys(currentCode.files).length > 0
-                        ? currentCode.files[selectedFile || Object.keys(currentCode.files)[0]]
-                        : currentCode.code
-                    }
-                    language={currentCode.language}
-                    filename={selectedFile || `component.${currentCode.language}`}
-                  />
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
-    </div>
-  )
-}
+                  
