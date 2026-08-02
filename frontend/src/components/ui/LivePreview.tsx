@@ -18,10 +18,11 @@ const TAILWIND_INDEX_HTML = `<!DOCTYPE html>
   </body>
 </html>`
 
+// Fichiers/packages toujours fournis d'office par le template Sandpack
+const BUILTIN_MODULES = new Set(['react', 'react-dom', 'react/jsx-runtime'])
+
 // Génère automatiquement des fichiers de remplacement pour tout import local
 // (ex: './components', './Plateau') que l'IA a référencé sans jamais générer.
-// Évite le crash "Could not find module" quand le code généré n'est pas
-// autonome dans un seul fichier.
 function buildStubFilesForMissingImports(code: string): Record<string, string> {
   const stubFiles: Record<string, string> = {}
   const importRegex = /import\s*\{([^}]+)\}\s*from\s*['"](\.\/[^'"]+)['"]/g
@@ -29,20 +30,18 @@ function buildStubFilesForMissingImports(code: string): Record<string, string> {
 
   while ((match = importRegex.exec(code)) !== null) {
     const names = match[1].split(',').map(n => n.trim()).filter(Boolean)
-    let relPath = match[2]
+    const relPath = match[2]
     if (!relPath.startsWith('./')) continue
     let filePath = '/' + relPath.replace('./', '')
     if (!filePath.endsWith('.tsx') && !filePath.endsWith('.ts')) {
       filePath += '.tsx'
     }
-    // Ne pas écraser un fichier déjà généré pour ce chemin
     if (stubFiles[filePath]) continue
 
     const exports = names
       .map(name => {
         const isComponent = /^[A-Z]/.test(name)
         if (!isComponent) {
-          // Probablement une fonction utilitaire ou une constante
           return `export const ${name} = (...args: any[]) => args[0]`
         }
         return `export const ${name} = ({ children, ...props }: any) => (
@@ -57,10 +56,30 @@ function buildStubFilesForMissingImports(code: string): Record<string, string> {
   return stubFiles
 }
 
+// Détecte tout package npm importé (ex: 'axios', 'framer-motion') et
+// l'ajoute automatiquement aux dépendances de l'aperçu, pour éviter
+// "Could not find dependency" quand l'IA utilise une librairie externe.
+function detectNpmDependencies(code: string): Record<string, string> {
+  const deps: Record<string, string> = {}
+  const importRegex = /import\s+(?:[\w*{}\s,]+\s+from\s+)?['"]([^'".\/][^'"]*)['"]/g
+  let match: RegExpExecArray | null
+
+  while ((match = importRegex.exec(code)) !== null) {
+    let pkg = match[1]
+    const parts = pkg.split('/')
+    pkg = pkg.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]
+    if (BUILTIN_MODULES.has(pkg)) continue
+    deps[pkg] = 'latest'
+  }
+
+  return deps
+}
+
 export default function LivePreview({ code }: LivePreviewProps) {
   const [showConsole, setShowConsole] = useState(false)
 
   const stubFiles = useMemo(() => buildStubFilesForMissingImports(code), [code])
+  const npmDeps = useMemo(() => detectNpmDependencies(code), [code])
 
   return (
     <div className="rounded-2xl overflow-hidden border border-border bg-bg-card">
@@ -89,6 +108,7 @@ export default function LivePreview({ code }: LivePreviewProps) {
         customSetup={{
           dependencies: {
             'lucide-react': 'latest',
+            ...npmDeps,
           },
         }}
       >
