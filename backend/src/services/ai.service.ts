@@ -222,7 +222,7 @@ export async function generateFullStack(
   }
 }
 
-function extractCodeBlock(text: string, language: string): string | null {
+export function extractCodeBlock(text: string, language: string): string | null {
   const fence = '```'
   const regex = new RegExp(fence + language + '([\\s\\S]*?)' + fence, 'g')
   const matches = [...text.matchAll(regex)]
@@ -240,4 +240,4 @@ Réponds en JSON: { intent, features[], techStack, complexity }`,
   })
 
   return response.content[0].type === 'text' ? response.content[0].text : transcript
-}
+  }
