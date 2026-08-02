@@ -15,7 +15,13 @@ const AGENTS: AIAgent[] = [
 - constraints: contraintes techniques
 - targetAudience: public cible
 - suggestedArchitecture: architecture suggérée (frontend|fullstack|mobile)
-Réponds UNIQUEMENT en JSON valide, sans markdown.`,
+Réponds UNIQUEMENT en JSON valide, sans markdown.
+
+RÈGLE ABSOLUE : le champ "features" doit correspondre EXACTEMENT à ce que l'utilisateur a demandé, ni plus ni moins.
+- N'ajoute AUCUNE fonctionnalité que l'utilisateur n'a pas explicitement demandée
+- Ne retire AUCUNE fonctionnalité que l'utilisateur a explicitement demandée
+- N'interprète pas, ne devine pas, ne "complète" pas la demande avec tes propres idées
+- Si la demande est simple et précise, la liste de features doit rester simple et précise`,
   },
   {
     id: 'architect',
@@ -52,7 +58,13 @@ Réponds UNIQUEMENT en JSON valide.`,
 - Props typées avec interfaces
 - Gestion d'erreurs avec Error Boundary
 - Code splité en fichiers logiques
-Génère le code COMPLET et FONCTIONNEL, pas de placeholders.`,
+Génère le code COMPLET et FONCTIONNEL, pas de placeholders.
+
+FORMAT DE RÉPONSE OBLIGATOIRE :
+- Réponds UNIQUEMENT avec un unique bloc de code \`\`\`tsx ... \`\`\`
+- Aucun texte avant le bloc, aucun texte après le bloc
+- Aucune explication, aucune phrase d'introduction ou de conclusion
+- Le bloc de code doit être complet et se terminer par le \`\`\` de fermeture`,
   },
   {
     id: 'tester',
@@ -70,13 +82,14 @@ Réponds UNIQUEMENT en JSON valide.`,
     id: 'optimizer',
     name: 'Optimiseur',
     role: 'optimizer',
-    systemPrompt: `Tu es un expert performance. Optimise le code et retourne :
-- optimizedCode: code optimisé complet
-- improvements: tableau des améliorations apportées
-- metrics: { bundleSize, renderTime, lighthouseScore }
-- seo: suggestions SEO
-- accessibility: score et améliorations
-Réponds avec le code optimisé en premier, puis les métriques.`,
+    systemPrompt: `Tu es un expert performance. Ta seule tâche est de reprendre le code fourni et de l'optimiser (performance, lisibilité, accessibilité) sans en changer le comportement.
+
+FORMAT DE RÉPONSE OBLIGATOIRE :
+- Réponds UNIQUEMENT avec un unique bloc de code \`\`\`tsx ... \`\`\` contenant le code optimisé complet
+- Aucun texte avant le bloc, aucun texte après le bloc
+- Aucune explication, aucune liste d'améliorations, aucune métrique, aucune phrase de conversation
+- Si tu n'as aucune optimisation à apporter, renvoie le code original tel quel dans le bloc
+- Le bloc de code doit être complet et se terminer par le \`\`\` de fermeture`,
   },
 ]
 export async function runMultiAgentPipeline(
@@ -120,6 +133,8 @@ DESIGN: ${design.output}
 TYPE: ${architecture}
 
 Génère le code COMPLET pour: ${prompt}
+
+Respecte strictement cette demande, sans y ajouter de fonctionnalités non demandées.
     `)
     results.push(dev)
 
@@ -240,4 +255,4 @@ Réponds en JSON: { intent, features[], techStack, complexity }`,
   })
 
   return response.content[0].type === 'text' ? response.content[0].text : transcript
-  }
+}
