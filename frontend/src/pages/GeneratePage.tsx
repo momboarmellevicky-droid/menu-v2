@@ -4,6 +4,7 @@ import { Send, Copy, Check, Download, Sparkles, Mic, Layers, Smartphone, Globe, 
 import VoiceButton from '../components/ui/VoiceButton'
 import AgentStatus from '../components/ui/AgentStatus'
 import CodeBlock from '../components/ui/CodeBlock'
+import LivePreview from '../components/ui/LivePreview'
 import MemoryBadge from '../components/ui/MemoryBadge'
 import { useCodeGeneration } from '../hooks/useCodeGeneration'
 import { useVoiceInput } from '../hooks/useVoiceInput'
@@ -31,6 +32,7 @@ const severityStyles: Record<string, { icon: typeof ShieldAlert; color: string; 
 export default function GeneratePage() {
   const [prompt, setPrompt] = useState('')
   const [architecture, setArchitecture] = useState('frontend')
+  const [view, setView] = useState<'preview' | 'code'>('preview')
   const [exportFormat, setExportFormat] = useState<ExportFormat>('react')
   const { isListening, transcript, startListening, stopListening, resetTranscript, error: voiceError } = useVoiceInput()
   const { isGenerating, progress, agents, currentCode, error, generate, generateFullStack } = useCodeGeneration()
@@ -195,7 +197,24 @@ export default function GeneratePage() {
               className="space-y-4"
             >
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-lg">Code généré</h3>
+                <div className="flex items-center gap-2 bg-bg-card border border-border rounded-xl p-1">
+                  <button
+                    onClick={() => setView('preview')}
+                    className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                      view === 'preview' ? 'bg-primary/10 text-primary' : 'text-text-muted hover:text-white'
+                    }`}
+                  >
+                    Aperçu
+                  </button>
+                  <button
+                    onClick={() => setView('code')}
+                    className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                      view === 'code' ? 'bg-primary/10 text-primary' : 'text-text-muted hover:text-white'
+                    }`}
+                  >
+                    Code
+                  </button>
+                </div>
                 <div className="flex gap-2">
                   <span className="px-3 py-1 bg-primary/10 text-primary text-xs rounded-lg border border-primary/20">
                     {currentCode.framework}
@@ -265,11 +284,15 @@ export default function GeneratePage() {
                 </div>
               )}
 
-              <CodeBlock 
-                code={currentCode.code} 
-                language={currentCode.language} 
-                filename={`component.${currentCode.language}`}
-              />
+              {view === 'preview' && (currentCode.framework === 'react' || currentCode.language === 'tsx') ? (
+                <LivePreview code={currentCode.code} />
+              ) : (
+                <CodeBlock 
+                  code={currentCode.code} 
+                  language={currentCode.language} 
+                  filename={`component.${currentCode.language}`}
+                />
+              )}
             </motion.div>
           )}
         </AnimatePresence>
