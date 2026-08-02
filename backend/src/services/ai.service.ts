@@ -50,21 +50,25 @@ Réponds UNIQUEMENT en JSON valide.`,
     id: 'developer',
     name: 'Développeur',
     role: 'developer',
-    systemPrompt: `Tu es un développeur Full Stack React/TypeScript expert. RÈGLES STRICTES :
+    systemPrompt: `Tu es un développeur Full Stack React/TypeScript expert qui construit de VRAIS projets multi-fichiers, comme un vrai projet Vite + React (pas un fichier unique compressé).
+
+RÈGLES STRICTES :
+- Découpe le projet en plusieurs fichiers logiques : /src/App.tsx (composant racine), /src/components/NomDuComposant.tsx (un fichier par composant réutilisable), /src/types.ts (types partagés si besoin), /src/utils.ts (fonctions utilitaires si besoin)
 - Composants React fonctionnels avec hooks
 - TypeScript strict (pas de 'any')
 - Tailwind CSS pour le styling
 - Accessibilité (ARIA labels, roles)
 - Props typées avec interfaces
-- Gestion d'erreurs avec Error Boundary
-- TOUT le code doit tenir dans UN SEUL fichier (pas d'import depuis d'autres fichiers locaux comme './components' ou './Plateau') : définis tous les sous-composants dans ce même fichier, au-dessus du composant principal
-Génère le code COMPLET et FONCTIONNEL, pas de placeholders.
+- Chaque composant importe correctement ses dépendances depuis les autres fichiers du projet (chemins relatifs cohérents, ex: import Board from './components/Board')
+- Génère le code COMPLET et FONCTIONNEL de chaque fichier, pas de placeholders
 
-FORMAT DE RÉPONSE OBLIGATOIRE :
-- Réponds UNIQUEMENT avec un unique bloc de code \`\`\`tsx ... \`\`\`
-- Aucun texte avant le bloc, aucun texte après le bloc
-- Aucune explication, aucune phrase d'introduction ou de conclusion
-- Le bloc de code doit être complet et se terminer par le \`\`\` de fermeture`,
+FORMAT DE RÉPONSE OBLIGATOIRE — JSON STRICT UNIQUEMENT :
+Réponds UNIQUEMENT avec un objet JSON valide (rien avant, rien après, pas de markdown) où chaque clé est un chemin de fichier et chaque valeur le contenu complet du fichier :
+{
+  "/src/App.tsx": "contenu complet du fichier...",
+  "/src/components/Board.tsx": "contenu complet du fichier..."
+}
+Minimum 2 fichiers, maximum 6 fichiers. Le fichier racine doit obligatoirement s'appeler "/src/App.tsx" et exporter un composant par défaut.`,
   },
   {
     id: 'tester',
@@ -82,14 +86,13 @@ Réponds UNIQUEMENT en JSON valide.`,
     id: 'optimizer',
     name: 'Optimiseur',
     role: 'optimizer',
-    systemPrompt: `Tu es un expert performance. Ta seule tâche est de reprendre le code fourni et de l'optimiser (performance, lisibilité, accessibilité) sans en changer le comportement.
+    systemPrompt: `Tu es un expert performance. Ta seule tâche est de reprendre le projet multi-fichiers fourni (format JSON: chemin de fichier -> contenu) et de l'optimiser (performance, lisibilité, accessibilité) sans en changer le comportement ni la structure de fichiers.
 
-FORMAT DE RÉPONSE OBLIGATOIRE :
-- Réponds UNIQUEMENT avec un unique bloc de code \`\`\`tsx ... \`\`\` contenant le code optimisé complet
-- Aucun texte avant le bloc, aucun texte après le bloc
-- Aucune explication, aucune liste d'améliorations, aucune métrique, aucune phrase de conversation
-- Si tu n'as aucune optimisation à apporter, renvoie le code original tel quel dans le bloc
-- Le bloc de code doit être complet et se terminer par le \`\`\` de fermeture`,
+FORMAT DE RÉPONSE OBLIGATOIRE — JSON STRICT UNIQUEMENT :
+- Réponds UNIQUEMENT avec le MÊME objet JSON (mêmes clés de fichiers), avec le contenu optimisé
+- Aucun texte avant, aucun texte après, aucune explication, aucune métrique, aucune phrase de conversation
+- Si tu n'as aucune optimisation à apporter, renvoie l'objet JSON original tel quel
+- Ne retire et n'ajoute aucun fichier, garde exactement les mêmes clés`,
   },
 ]
 export async function runMultiAgentPipeline(
@@ -272,6 +275,47 @@ export function extractCodeBlock(text: string, language: string): string | null 
   return matches.length > 0 ? matches.map(m => m[1].trim()).join('\n\n') : null
 }
 
+// Extrait un projet multi-fichiers (JSON: chemin -> contenu) de la réponse d'un agent.
+// Tolère : JSON pur, JSON dans un bloc ```json, ou texte parasite autour du JSON.
+// Si rien n'est exploitable, retourne null (à charge de l'appelant de gérer le repli).
+export function extractFilesJson(text: string): Record<string, string> | null {
+  const tryParse = (raw: string): Record<string, string> | null => {
+    try {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const entries = Object.entries(parsed).filter(
+          ([k, v]) => typeof k === 'string' && typeof v === 'string' && k.startsWith('/')
+        )
+        if (entries.length > 0) return Object.fromEntries(entries) as Record<string, string>
+      }
+    } catch {
+      // ignore, on tente les autres stratégies
+    }
+    return null
+  }
+
+  // 1. JSON pur
+  const direct = tryParse(text.trim())
+  if (direct) return direct
+
+  // 2. JSON dans un bloc ```json ... ```
+  const fenced = extractCodeBlock(text, 'json')
+  if (fenced) {
+    const parsed = tryParse(fenced)
+    if (parsed) return parsed
+  }
+
+  // 3. Premier { ... dernier } dans le texte (au cas où il y a du texte parasite autour)
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  if (start !== -1 && end !== -1 && end > start) {
+    const parsed = tryParse(text.slice(start, end + 1))
+    if (parsed) return parsed
+  }
+
+  return null
+}
+
 export async function generateVoiceCommand(transcript: string): Promise<string> {
   const response = await anthropic.messages.create({
     model: AI_CONFIG.defaultModel,
@@ -283,4 +327,4 @@ Réponds en JSON: { intent, features[], techStack, complexity }`,
   })
 
   return response.content[0].type === 'text' ? response.content[0].text : transcript
-      }
+    }
