@@ -7,6 +7,11 @@ export const generateCodeSchema = z.object({
   projectId: z.string().uuid().optional(),
 })
 
+export const editCodeSchema = z.object({
+  projectId: z.string().uuid(),
+  instruction: z.string().min(1, "L'instruction est requise").max(2000, 'Instruction trop longue'),
+})
+
 export const createProjectSchema = z.object({
   name: z.string().min(1, 'Le nom est requis').max(100),
   description: z.string().max(1000).optional(),
@@ -25,6 +30,7 @@ export const inviteTeamSchema = z.object({
 })
 
 export type GenerateCodeInput = z.infer<typeof generateCodeSchema>
+export type EditCodeInput = z.infer<typeof editCodeSchema>
 export type CreateProjectInput = z.infer<typeof createProjectSchema>
 export type DeployInput = z.infer<typeof deploySchema>
 export type InviteTeamInput = z.infer<typeof inviteTeamSchema>
