@@ -9,6 +9,10 @@ import MarketplacePage from './pages/MarketplacePage'
 import TeamPage from './pages/TeamPage'
 import DeployPage from './pages/DeployPage'
 import AnalyticsPage from './pages/AnalyticsPage'
+import PricingPage from './pages/PricingPage'
+import TermsPage from './pages/legal/TermsPage'
+import PrivacyPage from './pages/legal/PrivacyPage'
+import SecurityPage from './pages/legal/SecurityPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 function App() {
@@ -18,6 +22,10 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/marketplace" element={<MarketplacePage />} />
+        <Route path="/pricing" element={<PricingPage />} />
+        <Route path="/legal/terms" element={<TermsPage />} />
+        <Route path="/legal/privacy" element={<PrivacyPage />} />
+        <Route path="/legal/security" element={<SecurityPage />} />
 
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<DashboardPage />} />
