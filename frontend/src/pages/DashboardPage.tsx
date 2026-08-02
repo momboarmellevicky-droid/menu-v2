@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Code2, Zap, TrendingUp, Clock, FolderOpen, Loader2 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
@@ -113,7 +114,11 @@ export default function DashboardPage() {
           ) : (
             <div className="divide-y divide-border">
               {projects.slice(0, 5).map((project) => (
-                <div key={project.id} className="flex items-center justify-between px-6 py-4 hover:bg-white/5 transition-colors">
+                <Link
+                  to={`/generate?project=${project.id}`}
+                  key={project.id}
+                  className="flex items-center justify-between px-6 py-4 hover:bg-white/5 transition-colors cursor-pointer"
+                >
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
                       <FolderOpen size={16} className="text-primary" />
@@ -125,7 +130,7 @@ export default function DashboardPage() {
                       </p>
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}
@@ -162,4 +167,4 @@ export default function DashboardPage() {
       </motion.div>
     </div>
   )
-                              }
+          }
