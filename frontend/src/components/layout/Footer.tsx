@@ -29,13 +29,21 @@ const footerLinks = [
       { label: 'Presse', href: '#' },
     ],
   },
+  {
+    title: 'Légal',
+    links: [
+      { label: 'Conditions d\'utilisation', href: '/legal/terms' },
+      { label: 'Confidentialité', href: '/legal/privacy' },
+      { label: 'Sécurité', href: '/legal/security' },
+    ],
+  },
 ]
 
 export default function Footer() {
   return (
     <footer className="relative z-10 border-t border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
             <div className="flex items-center gap-2 mb-4">
