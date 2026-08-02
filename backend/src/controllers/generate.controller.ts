@@ -44,12 +44,22 @@ export async function generateCode(req: Request, res: Response) {
 
     // Extraire le code final (isole le vrai code, retire la prose de l'IA)
     const finalResult = results[results.length - 1]
+    const devResult = results[3]
     const lang = framework === 'react' ? 'tsx' : framework
-    const generatedCode =
-      extractCodeBlock(finalResult.output, lang) ||
-      extractCodeBlock(finalResult.output, 'jsx') ||
-      extractCodeBlock(finalResult.output, 'javascript') ||
-      finalResult.output
+
+    const tryExtract = (text: string): string | null =>
+      extractCodeBlock(text, lang) ||
+      extractCodeBlock(text, 'jsx') ||
+      extractCodeBlock(text, 'javascript') ||
+      extractCodeBlock(text, 'typescript')
+
+    const looksLikeCode = (s: string) => /\breturn\s*\(/.test(s) || /<[a-zA-Z]/.test(s)
+
+    let generatedCode = tryExtract(finalResult.output)
+    if (!generatedCode || !looksLikeCode(generatedCode)) {
+      // L'Optimiseur n'a renvoyé que du texte : on retombe sur le code du Développeur
+      generatedCode = (devResult && tryExtract(devResult.output)) || devResult?.output || finalResult.output
+    }
 
     // Réparation automatique
     const repair = await repairCode(generatedCode, framework === 'react' ? 'tsx' : framework)
@@ -250,4 +260,4 @@ export async function generateVoiceCommand(req: Request, res: Response) {
 function extractComponentName(code: string): string {
   const match = code.match(/export\s+default\s+function\s+(\w+)/)
   return match?.[1] || 'GeneratedComponent'
-      }
+}
