@@ -57,7 +57,7 @@ Réponds UNIQUEMENT en JSON valide.`,
 - Accessibilité (ARIA labels, roles)
 - Props typées avec interfaces
 - Gestion d'erreurs avec Error Boundary
-- Code splité en fichiers logiques
+- TOUT le code doit tenir dans UN SEUL fichier (pas d'import depuis d'autres fichiers locaux comme './components' ou './Plateau') : définis tous les sous-composants dans ce même fichier, au-dessus du composant principal
 Génère le code COMPLET et FONCTIONNEL, pas de placeholders.
 
 FORMAT DE RÉPONSE OBLIGATOIRE :
