@@ -42,8 +42,6 @@ export async function deployProject(
     logger.info(`Déploiement ${platform} pour projet ${projectId}: succès (${buildResult.url})`)
     return updated
   } catch (buildError: any) {
-    // Échec réel du build : on ne renvoie jamais une URL inventée, on marque l'échec
-    // et on renvoie le vrai message d'erreur pour que l'utilisateur sache quoi corriger.
     await supabaseAdmin
       .from('deployments')
       .update({
@@ -57,13 +55,6 @@ export async function deployProject(
   }
 }
 
-/**
- * Déploiement RÉEL sur Vercel via leur API officielle (v13/deployments).
- * Le composant React généré est packagé en une page HTML statique autonome
- * (React + ReactDOM + Babel standalone via CDN, transformation JSX dans le
- * navigateur) : pas d'étape de build npm côté Vercel nécessaire, donc pas de
- * risque d'échec de build sur du code généré par IA potentiellement instable.
- */
 async function deployToVercel(
   projectId: string,
   platform: 'web' | 'pwa'
@@ -75,7 +66,7 @@ async function deployToVercel(
 
   const { data: codeRow, error: codeError } = await supabaseAdmin
     .from('generated_codes')
-    .select('code, prompt')
+    .select('code, files, prompt')
     .eq('project_id', projectId)
     .eq('framework', 'react')
     .order('created_at', { ascending: false })
@@ -88,15 +79,16 @@ async function deployToVercel(
   }
 
   const title = (codeRow.prompt || 'Application MÉNU').slice(0, 60)
-  const html = buildStaticHtml(codeRow.code, title, platform === 'pwa')
-  const files: { file: string; data: string }[] = [
-    { file: 'index.html', data: html },
-  ]
-  if (platform === 'pwa') {
+  const projectName = `menu-${projectId.slice(0, 8)}`
+  const hasMultiFiles = codeRow.files && typeof codeRow.files === 'object' && Object.keys(codeRow.files).length > 0
+
+  const files: { file: string; data: string }[] = hasMultiFiles
+    ? buildViteProjectFiles(codeRow.files as Record<string, string>)
+    : [{ file: 'index.html', data: buildStaticHtml(codeRow.code, title, platform === 'pwa') }]
+
+  if (!hasMultiFiles && platform === 'pwa') {
     files.push({ file: 'manifest.json', data: buildManifest(title) })
   }
-
-  const projectName = `menu-${projectId.slice(0, 8)}`
 
   const response = await fetch(`${VERCEL_API}/v13/deployments`, {
     method: 'POST',
@@ -108,7 +100,7 @@ async function deployToVercel(
       name: projectName,
       files,
       target: 'production',
-      projectSettings: { framework: null },
+      projectSettings: hasMultiFiles ? { framework: 'vite' } : { framework: null },
     }),
   })
 
@@ -123,16 +115,81 @@ async function deployToVercel(
 
   return {
     url,
-    logs: `Déploiement Vercel réussi.\nDeployment ID: ${result.id}\nURL: ${url}`,
+    logs: `Déploiement Vercel réussi (${hasMultiFiles ? 'projet multi-fichiers' : 'fichier unique'}).\nDeployment ID: ${result.id}\nURL: ${url}`,
   }
 }
 
-/**
- * Le build mobile réel (Expo/EAS) nécessite un compte Expo, un token EAS et
- * potentiellement des comptes développeur Apple/Google — pas encore configuré.
- * On échoue explicitement au lieu de renvoyer une fausse URL TestFlight/Expo,
- * pour ne jamais induire l'utilisateur en erreur sur ce qui est réellement livré.
- */
+function buildViteProjectFiles(sourceFiles: Record<string, string>): { file: string; data: string }[] {
+  const files: { file: string; data: string }[] = []
+
+  for (const [path, content] of Object.entries(sourceFiles)) {
+    const cleanPath = path.startsWith('/') ? path.slice(1) : path
+    files.push({ file: cleanPath, data: content })
+  }
+
+  files.push({
+    file: 'package.json',
+    data: JSON.stringify(
+      {
+        name: 'menu-generated-app',
+        private: true,
+        version: '1.0.0',
+        type: 'module',
+        scripts: { dev: 'vite', build: 'vite build', preview: 'vite preview' },
+        dependencies: {
+          react: '^18.3.1',
+          'react-dom': '^18.3.1',
+          'lucide-react': '^0.400.0',
+        },
+        devDependencies: {
+          '@types/react': '^18.3.0',
+          '@types/react-dom': '^18.3.0',
+          '@vitejs/plugin-react': '^4.3.0',
+          autoprefixer: '^10.4.19',
+          postcss: '^8.4.38',
+          tailwindcss: '^3.4.4',
+          typescript: '^5.5.0',
+          vite: '^5.3.0',
+        },
+      },
+      null,
+      2
+    ),
+  })
+
+  files.push({
+    file: 'vite.config.ts',
+    data: `import { defineConfig } from 'vite'\nimport react from '@vitejs/plugin-react'\n\nexport default defineConfig({\n  plugins: [react()],\n})\n`,
+  })
+
+  files.push({
+    file: 'tailwind.config.js',
+    data: `/** @type {import('tailwindcss').Config} */\nexport default {\n  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],\n  theme: { extend: {} },\n  plugins: [],\n}\n`,
+  })
+
+  files.push({
+    file: 'postcss.config.js',
+    data: `export default {\n  plugins: {\n    tailwindcss: {},\n    autoprefixer: {},\n  },\n}\n`,
+  })
+
+  files.push({
+    file: 'index.html',
+    data: `<!DOCTYPE html>\n<html lang="fr">\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Application MÉNU</title>\n  </head>\n  <body>\n    <div id="root"></div>\n    <script type="module" src="/src/main.tsx"></script>\n  </body>\n</html>\n`,
+  })
+
+  files.push({
+    file: 'src/main.tsx',
+    data: `import React from 'react'\nimport ReactDOM from 'react-dom/client'\nimport App from './App'\nimport './index.css'\n\nReactDOM.createRoot(document.getElementById('root')!).render(\n  <React.StrictMode>\n    <App />\n  </React.StrictMode>\n)\n`,
+  })
+
+  files.push({
+    file: 'src/index.css',
+    data: `@tailwind base;\n@tailwind components;\n@tailwind utilities;\n`,
+  })
+
+  return files
+}
+
 async function deployToExpo(
   _projectId: string,
   platform: 'android' | 'ios'
@@ -154,9 +211,6 @@ function buildManifest(title: string): string {
 }
 
 function buildStaticHtml(componentCode: string, title: string, isPwa: boolean): string {
-  // Le code généré exporte un composant par défaut ("export default function X").
-  // On le transforme en variable globale que Babel standalone compile côté client,
-  // puis on le monte directement dans #root.
   const cleanedCode = componentCode.replace(/export\s+default\s+/, 'window.GeneratedComponent = ')
 
   return `<!DOCTYPE html>
@@ -199,4 +253,4 @@ export async function getDeployments(projectId: string): Promise<Deployment[]> {
 
   if (error) throw error
   return data || []
-}
+  }
