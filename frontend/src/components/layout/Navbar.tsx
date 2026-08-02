@@ -10,6 +10,7 @@ const navLinks = [
   { path: '/', label: 'Accueil' },
   { path: '/generate', label: 'Générer' },
   { path: '/marketplace', label: 'Marketplace' },
+  { path: '/pricing', label: 'Tarifs' },
   { path: '/team', label: 'Équipe' },
   { path: '/deploy', label: 'Déployer' },
 ]
