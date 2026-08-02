@@ -1,5 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
-import type { GeneratedCode, Project, MarketplaceItem, User } from '../types'
+import type { GeneratedCode, Project, MarketplaceItem, User, ExplainedError } from '../types'
+
+export class ApiError extends Error {
+  details?: ExplainedError
+  constructor(message: string, details?: ExplainedError) {
+    super(message)
+    this.name = 'ApiError'
+    this.details = details
+  }
+}
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL!
@@ -32,7 +41,8 @@ class ApiClient {
 
     if (!response.ok) {
       const error = await response.json()
-      throw new Error(error.reason ? `${error.error} (${error.reason})` : error.error || `HTTP ${response.status}`)
+      const message = error.reason ? `${error.error} (${error.reason})` : error.error || `HTTP ${response.status}`
+      throw new ApiError(message, error.details)
     }
     return response.json()
   }
