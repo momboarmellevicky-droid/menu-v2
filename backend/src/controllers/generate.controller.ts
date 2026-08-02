@@ -45,7 +45,7 @@ export async function generateCode(req: Request, res: Response) {
       projectId = newProject.id
     }
 
-    const currentProjectId: string = projectId
+    const currentProjectId: string = projectId as string
 
     // Récupérer la mémoire du projet
     const memory = await getProjectMemory(currentProjectId)
