@@ -45,8 +45,10 @@ export async function generateCode(req: Request, res: Response) {
       projectId = newProject.id
     }
 
+    const currentProjectId: string = projectId
+
     // Récupérer la mémoire du projet
-    const memory = await getProjectMemory(projectId)
+    const memory = await getProjectMemory(currentProjectId)
 
     // Génération avec les agents
     const results = await runMultiAgentPipeline(
@@ -100,7 +102,7 @@ export async function generateCode(req: Request, res: Response) {
     const insertPromise = supabaseAdmin
       .from('generated_codes')
       .insert({
-        project_id: projectId,
+        project_id: currentProjectId,
         user_id: userId,
         prompt,
         code: repair.fixedCode,
@@ -129,7 +131,7 @@ export async function generateCode(req: Request, res: Response) {
     await supabaseAdmin
       .from('projects')
       .update({ status: 'completed' })
-      .eq('id', projectId)
+      .eq('id', currentProjectId)
 
     // Mettre à jour les crédits
     await supabaseAdmin
@@ -138,8 +140,8 @@ export async function generateCode(req: Request, res: Response) {
       .eq('id', userId)
 
     // Mettre à jour la mémoire du projet
-    await addComponentToMemory(projectId, extractComponentName(repair.fixedCode))
-    await updateProjectMemory(projectId, {
+    await addComponentToMemory(currentProjectId, extractComponentName(repair.fixedCode))
+    await updateProjectMemory(currentProjectId, {
       history: [{
         id: crypto.randomUUID(),
         type: 'add',
@@ -154,7 +156,7 @@ export async function generateCode(req: Request, res: Response) {
       code: repair.fixedCode,
       files,
       id: codeRecord.id,
-      projectId,
+      projectId: currentProjectId,
       agents: results.map(r => ({
         name: r.agent,
         status: r.status,
