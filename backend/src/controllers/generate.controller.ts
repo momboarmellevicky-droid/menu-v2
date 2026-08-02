@@ -1,5 +1,6 @@
 import { Request, Response } from 'express'
 import { runMultiAgentPipeline, generateFullStack, extractCodeBlock, extractFilesJson } from '../services/ai.service'
+import { explainError } from '../services/errorExplainer.service'
 import { repairCode } from '../services/codeRepair.service'
 import { getProjectMemory, updateProjectMemory, addComponentToMemory } from '../services/memory.service'
 import { supabaseAdmin } from '../config/supabase'
@@ -173,7 +174,9 @@ export async function generateCode(req: Request, res: Response) {
   } catch (error) {
     logger.error('Erreur génération:', error)
     if (error instanceof AppError) throw error
-    res.status(500).json({ error: 'Erreur de génération' })
+    const rawMessage = error instanceof Error ? error.message : 'Erreur inconnue'
+    const explained = explainError(rawMessage)
+    res.status(500).json({ error: 'Erreur de génération', details: explained })
   }
 }
 
@@ -271,7 +274,9 @@ export async function generateFullStackProject(req: Request, res: Response) {
   } catch (error) {
     logger.error('Erreur Full Stack:', error)
     if (error instanceof AppError) throw error
-    res.status(500).json({ error: 'Erreur génération Full Stack' })
+    const rawMessage = error instanceof Error ? error.message : 'Erreur inconnue'
+    const explained = explainError(rawMessage)
+    res.status(500).json({ error: 'Erreur génération Full Stack', details: explained })
   }
 }
 
@@ -300,4 +305,4 @@ export async function generateVoiceCommand(req: Request, res: Response) {
 function extractComponentName(code: string): string {
   const match = code.match(/export\s+default\s+function\s+(\w+)/)
   return match?.[1] || 'GeneratedComponent'
-      }
+        }
