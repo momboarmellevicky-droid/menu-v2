@@ -4,6 +4,7 @@ import { Terminal, Eye } from 'lucide-react'
 
 interface LivePreviewProps {
   code: string
+  files?: Record<string, string>
 }
 
 const TAILWIND_INDEX_HTML = `<!DOCTYPE html>
@@ -18,11 +19,17 @@ const TAILWIND_INDEX_HTML = `<!DOCTYPE html>
   </body>
 </html>`
 
-// Fichiers/packages toujours fournis d'office par le template Sandpack
 const BUILTIN_MODULES = new Set(['react', 'react-dom', 'react/jsx-runtime'])
 
-// Génère automatiquement des fichiers de remplacement pour tout import local
-// (ex: './components', './Plateau') que l'IA a référencé sans jamais générer.
+function normalizeMultiFiles(files: Record<string, string>): Record<string, string> {
+  const normalized: Record<string, string> = {}
+  for (const [path, content] of Object.entries(files)) {
+    const cleanPath = path.replace(/^\/src\//, '/').replace(/^src\//, '/')
+    normalized[cleanPath.startsWith('/') ? cleanPath : `/${cleanPath}`] = content
+  }
+  return normalized
+}
+
 function buildStubFilesForMissingImports(code: string): Record<string, string> {
   const stubFiles: Record<string, string> = {}
   const importRegex = /import\s*\{([^}]+)\}\s*from\s*['"](\.\/[^'"]+)['"]/g
@@ -56,9 +63,6 @@ function buildStubFilesForMissingImports(code: string): Record<string, string> {
   return stubFiles
 }
 
-// Détecte tout package npm importé (ex: 'axios', 'framer-motion') et
-// l'ajoute automatiquement aux dépendances de l'aperçu, pour éviter
-// "Could not find dependency" quand l'IA utilise une librairie externe.
 function detectNpmDependencies(code: string): Record<string, string> {
   const deps: Record<string, string> = {}
   const importRegex = /import\s+(?:[\w*{}\s,]+\s+from\s+)?['"]([^'".\/][^'"]*)['"]/g
@@ -75,11 +79,30 @@ function detectNpmDependencies(code: string): Record<string, string> {
   return deps
 }
 
-export default function LivePreview({ code }: LivePreviewProps) {
+export default function LivePreview({ code, files }: LivePreviewProps) {
   const [showConsole, setShowConsole] = useState(false)
 
-  const stubFiles = useMemo(() => buildStubFilesForMissingImports(code), [code])
-  const npmDeps = useMemo(() => detectNpmDependencies(code), [code])
+  const hasMultiFiles = files && Object.keys(files).length > 1
+
+  const sandboxFiles = useMemo(() => {
+    if (hasMultiFiles) {
+      const normalized = normalizeMultiFiles(files!)
+      if (!normalized['/App.tsx']) {
+        const firstKey = Object.keys(normalized)[0]
+        normalized['/App.tsx'] = normalized[firstKey]
+      }
+      return normalized
+    }
+    return { '/App.tsx': code }
+  }, [hasMultiFiles, files, code])
+
+  const allCodeConcatenated = useMemo(
+    () => Object.values(sandboxFiles).join('\n'),
+    [sandboxFiles]
+  )
+
+  const stubFiles = useMemo(() => buildStubFilesForMissingImports(allCodeConcatenated), [allCodeConcatenated])
+  const npmDeps = useMemo(() => detectNpmDependencies(allCodeConcatenated), [allCodeConcatenated])
 
   return (
     <div className="rounded-2xl overflow-hidden border border-border bg-bg-card">
@@ -87,6 +110,11 @@ export default function LivePreview({ code }: LivePreviewProps) {
         <div className="flex items-center gap-2 text-sm text-text-muted">
           <Eye size={16} />
           Aperçu en direct
+          {hasMultiFiles && (
+            <span className="ml-2 px-2 py-0.5 text-xs bg-primary/10 text-primary rounded-lg border border-primary/20">
+              {Object.keys(files!).length} fichiers
+            </span>
+          )}
         </div>
         <button
           onClick={() => setShowConsole(v => !v)}
@@ -101,7 +129,7 @@ export default function LivePreview({ code }: LivePreviewProps) {
         template="react-ts"
         theme="dark"
         files={{
-          '/App.tsx': code,
+          ...sandboxFiles,
           '/public/index.html': TAILWIND_INDEX_HTML,
           ...stubFiles,
         }}
