@@ -1,5 +1,5 @@
 import { Request, Response } from 'express'
-import { runMultiAgentPipeline, generateFullStack, extractCodeBlock } from '../services/ai.service'
+import { runMultiAgentPipeline, generateFullStack, extractCodeBlock, extractFilesJson } from '../services/ai.service'
 import { repairCode } from '../services/codeRepair.service'
 import { getProjectMemory, updateProjectMemory, addComponentToMemory } from '../services/memory.service'
 import { supabaseAdmin } from '../config/supabase'
@@ -10,7 +10,8 @@ import { AppError } from '../middleware/error.middleware'
 export async function generateCode(req: Request, res: Response) {
   try {
     const validated = generateCodeSchema.parse(req.body)
-    const { prompt, framework, architecture, projectId } = validated
+    const { prompt, framework, architecture } = validated
+    let { projectId } = validated
     const userId = req.user!.id
 
     // Vérifier les crédits
@@ -25,11 +26,27 @@ export async function generateCode(req: Request, res: Response) {
       throw new AppError('Crédits insuffisants. Passez au plan Pro.', 403)
     }
 
-    // Récupérer la mémoire du projet
-    let memory = null
-    if (projectId) {
-      memory = await getProjectMemory(projectId)
+    // Créer un vrai projet si aucun n'est fourni (chaque génération doit
+    // correspondre à un projet réel, visible et cliquable dans "Vos projets")
+    if (!projectId) {
+      const { data: newProject, error: newProjectError } = await supabaseAdmin
+        .from('projects')
+        .insert({
+          user_id: userId,
+          name: prompt.slice(0, 60),
+          description: prompt,
+          architecture,
+          status: 'generating',
+        })
+        .select('id')
+        .single()
+
+      if (newProjectError) throw newProjectError
+      projectId = newProject.id
     }
+
+    // Récupérer la mémoire du projet
+    const memory = await getProjectMemory(projectId)
 
     // Génération avec les agents
     const results = await runMultiAgentPipeline(
@@ -37,17 +54,18 @@ export async function generateCode(req: Request, res: Response) {
       architecture,
       memory || undefined,
       (agent, progress) => {
-        // Envoyer les mises à jour via SSE (Server-Sent Events) si implémenté
         logger.info(`Progress: ${agent} - ${progress}%`)
       }
     )
 
-    // Extraire le code final (isole le vrai code, retire la prose de l'IA)
+    // Extraire le projet final : d'abord en multi-fichiers (nouveau format),
+    // avec repli sur l'ancien format fichier unique si l'IA n'a pas respecté
+    // le format JSON demandé.
     const finalResult = results[results.length - 1]
     const devResult = results[3]
     const lang = framework === 'react' ? 'tsx' : framework
 
-    const tryExtract = (text: string): string | null =>
+    const tryExtractSingle = (text: string): string | null =>
       extractCodeBlock(text, lang) ||
       extractCodeBlock(text, 'jsx') ||
       extractCodeBlock(text, 'javascript') ||
@@ -55,14 +73,27 @@ export async function generateCode(req: Request, res: Response) {
 
     const looksLikeCode = (s: string) => /\breturn\s*\(/.test(s) || /<[a-zA-Z]/.test(s)
 
-    let generatedCode = tryExtract(finalResult.output)
-    if (!generatedCode || !looksLikeCode(generatedCode)) {
-      // L'Optimiseur n'a renvoyé que du texte : on retombe sur le code du Développeur
-      generatedCode = (devResult && tryExtract(devResult.output)) || devResult?.output || finalResult.output
+    let files: Record<string, string> | null =
+      extractFilesJson(finalResult.output) ||
+      (devResult ? extractFilesJson(devResult.output) : null)
+
+    let generatedCode: string
+
+    if (files && files['/src/App.tsx']) {
+      generatedCode = files['/src/App.tsx']
+    } else {
+      // Repli complet ancien comportement (fichier unique)
+      let single = tryExtractSingle(finalResult.output)
+      if (!single || !looksLikeCode(single)) {
+        single = (devResult && tryExtractSingle(devResult.output)) || devResult?.output || finalResult.output
+      }
+      generatedCode = single
+      files = { '/src/App.tsx': single }
     }
 
-    // Réparation automatique
+    // Réparation automatique du fichier principal
     const repair = await repairCode(generatedCode, framework === 'react' ? 'tsx' : framework)
+    files['/src/App.tsx'] = repair.fixedCode
 
     // Sauvegarder dans Supabase (avec timeout pour éviter un blocage silencieux)
     logger.info('Insertion Supabase generated_codes...')
@@ -73,6 +104,7 @@ export async function generateCode(req: Request, res: Response) {
         user_id: userId,
         prompt,
         code: repair.fixedCode,
+        files,
         language: framework === 'react' ? 'tsx' : framework,
         framework,
         agent_logs: results.map(r => ({
@@ -93,6 +125,12 @@ export async function generateCode(req: Request, res: Response) {
 
     if (error) throw error
 
+    // Marquer le projet comme terminé
+    await supabaseAdmin
+      .from('projects')
+      .update({ status: 'completed' })
+      .eq('id', projectId)
+
     // Mettre à jour les crédits
     await supabaseAdmin
       .from('profiles')
@@ -100,23 +138,23 @@ export async function generateCode(req: Request, res: Response) {
       .eq('id', userId)
 
     // Mettre à jour la mémoire du projet
-    if (projectId) {
-      await addComponentToMemory(projectId, extractComponentName(repair.fixedCode))
-      await updateProjectMemory(projectId, {
-        history: [{
-          id: crypto.randomUUID(),
-          type: 'add',
-          description: `Génération: ${prompt.slice(0, 100)}`,
-          timestamp: new Date().toISOString(),
-          author: userId,
-        }]
-      })
-    }
+    await addComponentToMemory(projectId, extractComponentName(repair.fixedCode))
+    await updateProjectMemory(projectId, {
+      history: [{
+        id: crypto.randomUUID(),
+        type: 'add',
+        description: `Génération: ${prompt.slice(0, 100)}`,
+        timestamp: new Date().toISOString(),
+        author: userId,
+      }]
+    })
 
     res.json({
       success: true,
       code: repair.fixedCode,
+      files,
       id: codeRecord.id,
+      projectId,
       agents: results.map(r => ({
         name: r.agent,
         status: r.status,
@@ -260,4 +298,4 @@ export async function generateVoiceCommand(req: Request, res: Response) {
 function extractComponentName(code: string): string {
   const match = code.match(/export\s+default\s+function\s+(\w+)/)
   return match?.[1] || 'GeneratedComponent'
-}
+      }
