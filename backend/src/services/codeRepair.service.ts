@@ -12,8 +12,11 @@ export async function repairCode(
   const nextId = () => `diag-${++counter}`
 
   try {
+    const hasUseStateImport = /import\s+(?:React\s*,\s*)?\{[^}]*\buseState\b[^}]*\}\s+from\s+['"]react['"]/.test(code)
+    const hasUseEffectImport = /import\s+(?:React\s*,\s*)?\{[^}]*\buseEffect\b[^}]*\}\s+from\s+['"]react['"]/.test(code)
+
     if ((language === 'tsx' || language === 'jsx') && code.includes('useState')) {
-      if (!code.includes('import { useState }') && !code.includes('import React, { useState }')) {
+      if (!hasUseStateImport) {
         diagnostics.push({
           id: nextId(),
           service: 'codeRepair.service.ts',
@@ -29,7 +32,7 @@ export async function repairCode(
     }
 
     if ((language === 'tsx' || language === 'jsx') && code.includes('useEffect')) {
-      if (!code.includes('import { useEffect }') && !code.includes('import React, { useEffect }')) {
+      if (!hasUseEffectImport) {
         diagnostics.push({
           id: nextId(),
           service: 'codeRepair.service.ts',
