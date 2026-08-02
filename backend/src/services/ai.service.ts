@@ -137,6 +137,7 @@ Génère le code COMPLET pour: ${prompt}
 Respecte strictement cette demande, sans y ajouter de fonctionnalités non demandées.
     `)
     results.push(dev)
+    if (dev.status === 'error') throw new Error(`Erreur Développeur: ${dev.output}`)
 
     onProgress?.('Testeur', 80)
     const test = await callAgent(AGENTS[4], dev.output)
@@ -258,4 +259,4 @@ Réponds en JSON: { intent, features[], techStack, complexity }`,
   })
 
   return response.content[0].type === 'text' ? response.content[0].text : transcript
-      }
+                    }
