@@ -89,6 +89,13 @@ export interface DeployTarget {
 
 export type ExportFormat = 'react' | 'html' | 'vue' | 'react-native'
 
+export interface ExplainedError {
+  title: string
+  explanation: string
+  suggestion: string
+  category: 'quota' | 'config' | 'timeout' | 'validation' | 'network' | 'unknown'
+}
+
 export interface AnalyticsData {
   projectsCreated: number
   timeSaved: number
