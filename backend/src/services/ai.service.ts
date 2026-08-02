@@ -210,7 +210,9 @@ async function callAgent(agent: AIAgent, input: string): Promise<GenerationResul
         timestamp: new Date().toISOString(),
       }
     } catch (fallbackError) {
-      logger.error(`Erreur fallback Groq pour ${agent.name}:`, fallbackError instanceof Error ? fallbackError.message : fallbackError)
+      logger.error(`Erreur fallback Groq pour ${agent.name}`, {
+        message: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+      })
       return {
         agent: agent.name,
         output: error instanceof Error ? error.message : 'Erreur inconnue',
