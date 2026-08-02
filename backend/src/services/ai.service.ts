@@ -1,4 +1,4 @@
-import { anthropic, openai, AI_CONFIG } from '../config/openai'
+import { anthropic, openai, gemini, AI_CONFIG } from '../config/openai'
 import { cache } from '../config/redis'
 import { supabaseAdmin } from '../config/supabase'
 import { logger } from '../utils/logger'
@@ -214,11 +214,35 @@ async function callAgent(agent: AIAgent, input: string): Promise<GenerationResul
       logger.error(`Erreur fallback Groq pour ${agent.name}`, {
         message: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
       })
-      return {
-        agent: agent.name,
-        output: error instanceof Error ? error.message : 'Erreur inconnue',
-        status: 'error',
-        timestamp: new Date().toISOString(),
+
+      try {
+        if (!gemini) throw new Error('Gemini non configuré')
+
+        const model = gemini.getGenerativeModel({
+          model: AI_CONFIG.geminiModel,
+          systemInstruction: agent.systemPrompt,
+        })
+        const geminiResult = await model.generateContent(input)
+        const geminiOutput = geminiResult.response.text()
+
+        logger.info(`Agent ${agent.name} terminé via Gemini (fallback niveau 2)`)
+
+        return {
+          agent: agent.name,
+          output: geminiOutput,
+          status: 'success',
+          timestamp: new Date().toISOString(),
+        }
+      } catch (geminiError) {
+        logger.error(`Erreur fallback Gemini pour ${agent.name}`, {
+          message: geminiError instanceof Error ? geminiError.message : String(geminiError),
+        })
+        return {
+          agent: agent.name,
+          output: error instanceof Error ? error.message : 'Erreur inconnue',
+          status: 'error',
+          timestamp: new Date().toISOString(),
+        }
       }
     }
   }
@@ -259,4 +283,4 @@ Réponds en JSON: { intent, features[], techStack, complexity }`,
   })
 
   return response.content[0].type === 'text' ? response.content[0].text : transcript
-                    }
+      }
