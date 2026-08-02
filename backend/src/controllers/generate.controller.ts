@@ -1,5 +1,5 @@
 import { Request, Response } from 'express'
-import { runMultiAgentPipeline, generateFullStack } from '../services/ai.service'
+import { runMultiAgentPipeline, generateFullStack, extractCodeBlock } from '../services/ai.service'
 import { repairCode } from '../services/codeRepair.service'
 import { getProjectMemory, updateProjectMemory, addComponentToMemory } from '../services/memory.service'
 import { supabaseAdmin } from '../config/supabase'
@@ -42,9 +42,14 @@ export async function generateCode(req: Request, res: Response) {
       }
     )
 
-    // Extraire le code final
+    // Extraire le code final (isole le vrai code, retire la prose de l'IA)
     const finalResult = results[results.length - 1]
-    const generatedCode = finalResult.output
+    const lang = framework === 'react' ? 'tsx' : framework
+    const generatedCode =
+      extractCodeBlock(finalResult.output, lang) ||
+      extractCodeBlock(finalResult.output, 'jsx') ||
+      extractCodeBlock(finalResult.output, 'javascript') ||
+      finalResult.output
 
     // Réparation automatique
     const repair = await repairCode(generatedCode, framework === 'react' ? 'tsx' : framework)
@@ -245,4 +250,4 @@ export async function generateVoiceCommand(req: Request, res: Response) {
 function extractComponentName(code: string): string {
   const match = code.match(/export\s+default\s+function\s+(\w+)/)
   return match?.[1] || 'GeneratedComponent'
-}
+      }
