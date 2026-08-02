@@ -210,6 +210,7 @@ async function callAgent(agent: AIAgent, input: string): Promise<GenerationResul
         timestamp: new Date().toISOString(),
       }
     } catch (fallbackError) {
+      logger.error(`Erreur fallback Groq pour ${agent.name}:`, fallbackError instanceof Error ? fallbackError.message : fallbackError)
       return {
         agent: agent.name,
         output: error instanceof Error ? error.message : 'Erreur inconnue',
@@ -255,4 +256,4 @@ Réponds en JSON: { intent, features[], techStack, complexity }`,
   })
 
   return response.content[0].type === 'text' ? response.content[0].text : transcript
-}
+      }
