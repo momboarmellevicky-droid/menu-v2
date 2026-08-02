@@ -93,7 +93,9 @@ class ApiClient {
     return this.request<{
       success: boolean
       code: string
+      files: Record<string, string>
       id: string
+      projectId: string
       agents: { name: string; status: string }[]
       repair: { fixed: boolean; warnings: string[]; errors: string[]; diagnostics: import('../types').DiagnosticEntry[] }
       creditsRemaining: number
