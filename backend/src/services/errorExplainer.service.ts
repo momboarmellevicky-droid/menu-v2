@@ -70,6 +70,17 @@ export function explainError(rawMessage: string): ExplainedError {
     }
   }
 
+  if (/erreur de syntaxe non corrigeable/i.test(msg)) {
+    return {
+      title: 'Erreur de syntaxe non corrigeable automatiquement',
+      explanation:
+        "L'IA a généré du code contenant une erreur de syntaxe, et la tentative automatique de correction a également échoué. Cela arrive occasionnellement quand le fournisseur de secours (Groq ou Gemini) est utilisé au lieu de Claude.",
+      suggestion:
+        "Relancez la génération avec un prompt légèrement reformulé — une nouvelle tentative aboutit presque toujours à un résultat correct.",
+      category: 'validation',
+    }
+  }
+
   if (/erreur développeur|erreur analyste/i.test(msg)) {
     return {
       title: "Les agents IA n'ont pas pu produire de résultat",
