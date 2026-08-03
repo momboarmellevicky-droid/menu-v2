@@ -95,11 +95,76 @@ FORMAT DE RÉPONSE OBLIGATOIRE — JSON STRICT UNIQUEMENT :
 - Ne retire et n'ajoute aucun fichier, garde exactement les mêmes clés`,
   },
 ]
+
+// Agent Développeur pour le format d'export "HTML" — un vrai fichier HTML
+// autonome (CSS + JS inline), sans React ni JSX, contrairement au format
+// React qui reste multi-fichiers. Nécessaire car le sélecteur "HTML" dans
+// l'interface générait auparavant du React quoi qu'il arrive.
+const HTML_DEVELOPER: AIAgent = {
+  id: 'developer-html',
+  name: 'Développeur',
+  role: 'developer',
+  systemPrompt: `Tu es un développeur front-end expert en HTML/CSS/JavaScript vanille (sans framework, sans build).
+
+RÈGLES STRICTES :
+- Un seul fichier HTML autonome et complet : <!DOCTYPE html>, <head> avec <style> inline, <body> avec le contenu, <script> inline pour toute interactivité
+- Aucune dépendance externe à un build (pas de JSX, pas d'import de modules npm), sauf éventuellement une balise <script src="https://cdn..."> si strictement nécessaire (ex: Chart.js)
+- HTML sémantique, CSS moderne (flexbox/grid), accessibilité (ARIA, alt, labels)
+- JavaScript vanille pour toute interactivité (event listeners, pas de framework)
+- Génère le code COMPLET et FONCTIONNEL, pas de placeholders
+
+FORMAT DE RÉPONSE OBLIGATOIRE :
+Réponds UNIQUEMENT avec le contenu HTML complet, dans un bloc de code markdown \`\`\`html ... \`\`\`, rien avant, rien après.`,
+}
+
+const HTML_OPTIMIZER: AIAgent = {
+  id: 'optimizer-html',
+  name: 'Optimiseur',
+  role: 'optimizer',
+  systemPrompt: `Tu es un expert performance web. Reprends le fichier HTML autonome fourni et optimise-le (performance, lisibilité, accessibilité) sans changer son comportement.
+
+FORMAT DE RÉPONSE OBLIGATOIRE :
+Réponds UNIQUEMENT avec le HTML complet optimisé, dans un bloc de code markdown \`\`\`html ... \`\`\`, rien avant, rien après. Si aucune optimisation n'est nécessaire, renvoie le fichier original tel quel.`,
+}
+
+// Agents réels pour le mode "Full Stack" — auparavant, aucun agent ne
+// générait vraiment de backend Express ni de schéma SQL : seul le frontend
+// React était produit, sous une étiquette "Full Stack" trompeuse.
+const BACKEND_DEVELOPER: AIAgent = {
+  id: 'backend-developer',
+  name: 'Développeur Backend',
+  role: 'developer',
+  systemPrompt: `Tu es un développeur backend expert en Node.js/Express/TypeScript qui construit une vraie API REST.
+
+RÈGLES STRICTES :
+- Un seul fichier server.ts complet : configuration Express, routes REST cohérentes avec les fonctionnalités demandées, middlewares de base (cors, json body parser)
+- TypeScript strict, gestion d'erreurs sur chaque route
+- Utilise une connexion PostgreSQL générique (pg ou un client simple), sans supposer une infrastructure spécifique
+- Code complet et fonctionnel, pas de placeholders ni de "// TODO"
+
+FORMAT DE RÉPONSE OBLIGATOIRE :
+Réponds UNIQUEMENT avec le code TypeScript complet, dans un bloc de code markdown \`\`\`ts ... \`\`\`, rien avant, rien après.`,
+}
+
+const DATABASE_DESIGNER: AIAgent = {
+  id: 'database-designer',
+  name: 'Architecte Base de Données',
+  role: 'architect',
+  systemPrompt: `Tu es un architecte base de données expert PostgreSQL. À partir du frontend et du backend fournis, écris le schéma SQL complet nécessaire (tables, types, contraintes, index utiles).
+
+RÈGLES STRICTES :
+- SQL PostgreSQL valide et complet, prêt à exécuter
+- Cohérent avec les entités réellement utilisées par le frontend et le backend fournis
+- Inclut les clés primaires/étrangères et les contraintes NOT NULL pertinentes
+
+Réponds UNIQUEMENT avec le SQL complet, dans un bloc de code markdown \`\`\`sql ... \`\`\`, rien avant, rien après.`,
+}
 export async function runMultiAgentPipeline(
   prompt: string,
   architecture: 'frontend' | 'fullstack' | 'mobile' = 'frontend',
   memory?: ProjectMemory,
-  onProgress?: (agent: string, progress: number) => void
+  onProgress?: (agent: string, progress: number) => void,
+  framework: 'react' | 'html' = 'react'
 ): Promise<GenerationResult[]> {
   const results: GenerationResult[] = []
 
@@ -107,13 +172,20 @@ export async function runMultiAgentPipeline(
     ? `[CONTEXTE PROJET]\nVision: ${memory.vision}\nArchitecture: ${memory.architecture}\nComposants existants: ${memory.components.join(', ')}\n\n[Nouvelle demande]\n${prompt}`
     : prompt
 
-  const cacheKey = await cache.generateKey(enrichedPrompt, architecture)
+  const cacheKey = await cache.generateKey(enrichedPrompt, `${architecture}:${framework}`)
   const cached = await cache.get(cacheKey)
 
   if (cached) {
     logger.info('Cache hit pour la génération')
     return JSON.parse(cached)
   }
+
+  // Le format choisi par l'utilisateur (React ou HTML) détermine réellement
+  // quel agent Développeur/Optimiseur est utilisé — auparavant ce choix
+  // n'était jamais transmis au backend et du React était produit dans tous
+  // les cas, quel que soit le format sélectionné dans l'interface.
+  const developerAgent = framework === 'html' ? HTML_DEVELOPER : AGENTS[3]
+  const optimizerAgent = framework === 'html' ? HTML_OPTIMIZER : AGENTS[5]
 
   try {
     onProgress?.('Analyste', 10)
@@ -130,10 +202,11 @@ export async function runMultiAgentPipeline(
     results.push(design)
 
     onProgress?.('Développeur', 60)
-    const dev = await callAgent(AGENTS[3], `
+    const dev = await callAgent(developerAgent, `
 ARCHITECTURE: ${arch.output}
 DESIGN: ${design.output}
 TYPE: ${architecture}
+FORMAT: ${framework}
 
 Génère le code COMPLET pour: ${prompt}
 
@@ -147,7 +220,7 @@ Respecte strictement cette demande, sans y ajouter de fonctionnalités non deman
     results.push(test)
 
     onProgress?.('Optimiseur', 95)
-    const optimized = await callAgent(AGENTS[5], `
+    const optimized = await callAgent(optimizerAgent, `
 CODE ORIGINAL:
 ${dev.output}
 
@@ -239,7 +312,7 @@ async function callAgent(agent: AIAgent, input: string): Promise<GenerationResul
       } catch (geminiError) {
         logger.error(`Erreur fallback Gemini pour ${agent.name}`, {
           message: geminiError instanceof Error ? geminiError.message : String(geminiError),
-        })
+          })
         return {
           agent: agent.name,
           output: error instanceof Error ? error.message : 'Erreur inconnue',
@@ -256,15 +329,44 @@ export async function generateFullStack(
   memory?: ProjectMemory,
   onProgress?: (agent: string, progress: number) => void
 ) {
-  const results = await runMultiAgentPipeline(prompt, 'fullstack', memory, onProgress)
+  // Le frontend passe par le pipeline habituel (React multi-fichiers).
+  const results = await runMultiAgentPipeline(prompt, 'fullstack', memory, onProgress, 'react')
+  const frontendFiles = extractFilesJson(results[results.length - 1].output)
+  const frontendCode = frontendFiles?.['/src/App.tsx'] || results[results.length - 1].output
 
-  const fullOutput = results[results.length - 1].output
+  // Auparavant, "Full Stack" ne générait en réalité AUCUN backend ni base de
+  // données : la fonction essayait d'extraire du code déjà au format JSON
+  // multi-fichiers avec une regex cherchant d'anciens blocs markdown ```ts
+  // et ```sql qui n'existaient plus, donc backend/database revenaient
+  // toujours vides. Voici les deux vrais agents dédiés à la place.
+  onProgress?.('Développeur Backend', 97)
+  const backendResult = await callAgent(BACKEND_DEVELOPER, `
+FRONTEND GÉNÉRÉ (pour connaître les données et actions nécessaires) :
+${frontendCode}
+
+Demande originale : ${prompt}
+
+Écris le backend Express/TypeScript complet correspondant.
+  `)
+
+  onProgress?.('Architecte Base de Données', 99)
+  const databaseResult = await callAgent(DATABASE_DESIGNER, `
+FRONTEND :
+${frontendCode}
+
+BACKEND :
+${backendResult.output}
+
+Écris le schéma SQL PostgreSQL complet correspondant.
+  `)
+
+  const allResults = [...results, backendResult, databaseResult]
 
   return {
-    frontend: extractCodeBlock(fullOutput, 'tsx') || extractCodeBlock(fullOutput, 'jsx') || fullOutput,
-    backend: extractCodeBlock(fullOutput, 'ts') || extractCodeBlock(fullOutput, 'js') || '',
-    database: extractCodeBlock(fullOutput, 'sql') || '',
-    agents: results,
+    frontend: frontendCode,
+    backend: extractCodeBlock(backendResult.output, 'ts') || extractCodeBlock(backendResult.output, 'typescript') || backendResult.output,
+    database: extractCodeBlock(databaseResult.output, 'sql') || databaseResult.output,
+    agents: allResults,
   }
 }
 
@@ -364,4 +466,4 @@ Renvoie le projet complet mis à jour, au même format JSON.`
   }
 
   return { files, raw: result }
-      }
+          }
