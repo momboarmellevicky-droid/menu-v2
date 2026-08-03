@@ -1,6 +1,6 @@
 import { Request, Response } from 'express'
 import { runMultiAgentPipeline, generateFullStack, extractCodeBlock, extractFilesJson, editProject } from '../services/ai.service'
-import { checkSyntax } from '../services/syntaxValidator.service'
+import { checkSyntax, checkHtmlValidity } from '../services/syntaxValidator.service'
 import { explainError } from '../services/errorExplainer.service'
 import { repairCode } from '../services/codeRepair.service'
 import { getProjectMemory, updateProjectMemory, addComponentToMemory } from '../services/memory.service'
@@ -52,74 +52,90 @@ export async function generateCode(req: Request, res: Response) {
     // Récupérer la mémoire du projet
     const memory = await getProjectMemory(currentProjectId)
 
-    // Génération avec les agents
+    // Génération avec les agents — le format choisi (React ou HTML) est
+    // désormais réellement transmis et influence quel agent Développeur
+    // est utilisé (auparavant ce choix était ignoré, du React était
+    // toujours produit quel que soit le format sélectionné).
     const results = await runMultiAgentPipeline(
       prompt,
       architecture,
       memory || undefined,
       (agent, progress) => {
         logger.info(`Progress: ${agent} - ${progress}%`)
-      }
+      },
+      framework === 'html' ? 'html' : 'react'
     )
 
-    // Extraire le projet final : d'abord en multi-fichiers (nouveau format),
-    // avec repli sur l'ancien format fichier unique si l'IA n'a pas respecté
-    // le format JSON demandé.
     const finalResult = results[results.length - 1]
     const devResult = results[3]
-    const lang = framework === 'react' ? 'tsx' : framework
 
-    const tryExtractSingle = (text: string): string | null =>
-      extractCodeBlock(text, lang) ||
-      extractCodeBlock(text, 'jsx') ||
-      extractCodeBlock(text, 'javascript') ||
-      extractCodeBlock(text, 'typescript')
+    let files: Record<string, string>
+    let mainFileKey: string
 
-    const looksLikeCode = (s: string) => /\breturn\s*\(/.test(s) || /<[a-zA-Z]/.test(s)
-
-    let files: Record<string, string> | null =
-      extractFilesJson(finalResult.output) ||
-      (devResult ? extractFilesJson(devResult.output) : null)
-
-    let generatedCode: string
-
-    if (files && files['/src/App.tsx']) {
-      generatedCode = files['/src/App.tsx']
+    if (framework === 'html') {
+      const htmlContent =
+        extractCodeBlock(finalResult.output, 'html') ||
+        extractCodeBlock(devResult.output, 'html') ||
+        finalResult.output
+      mainFileKey = '/index.html'
+      files = { [mainFileKey]: htmlContent }
     } else {
-      // Repli complet ancien comportement (fichier unique)
-      let single = tryExtractSingle(finalResult.output)
-      if (!single || !looksLikeCode(single)) {
-        single = (devResult && tryExtractSingle(devResult.output)) || devResult?.output || finalResult.output
+      // Extraire le projet final : d'abord en multi-fichiers (nouveau format),
+      // avec repli sur l'ancien format fichier unique si l'IA n'a pas respecté
+      // le format JSON demandé.
+      const lang = 'tsx'
+      const tryExtractSingle = (text: string): string | null =>
+        extractCodeBlock(text, lang) ||
+        extractCodeBlock(text, 'jsx') ||
+        extractCodeBlock(text, 'javascript') ||
+        extractCodeBlock(text, 'typescript')
+
+      const looksLikeCode = (s: string) => /\breturn\s*\(/.test(s) || /<[a-zA-Z]/.test(s)
+
+      let extractedFiles: Record<string, string> | null =
+        extractFilesJson(finalResult.output) ||
+        (devResult ? extractFilesJson(devResult.output) : null)
+
+      mainFileKey = '/src/App.tsx'
+
+      if (extractedFiles && extractedFiles[mainFileKey]) {
+        files = extractedFiles
+      } else {
+        // Repli complet ancien comportement (fichier unique)
+        let single = tryExtractSingle(finalResult.output)
+        if (!single || !looksLikeCode(single)) {
+          single = (devResult && tryExtractSingle(devResult.output)) || devResult?.output || finalResult.output
+        }
+        files = { [mainFileKey]: single }
       }
-      generatedCode = single
-      files = { '/src/App.tsx': single }
     }
 
     // Réparation automatique du fichier principal
-    const repair = await repairCode(generatedCode, framework === 'react' ? 'tsx' : framework)
-    files['/src/App.tsx'] = repair.fixedCode
+    const repair = await repairCode(files[mainFileKey], framework === 'html' ? 'html' : 'tsx')
+    files[mainFileKey] = repair.fixedCode
 
-    // Vérification syntaxique réelle : si le code casse (erreur de syntaxe
-    // venant de l'IA), on tente une auto-correction avant de livrer quoi
-    // que ce soit à l'utilisateur, au lieu de renvoyer une app cassée.
-    let syntaxCheck = checkSyntax(files['/src/App.tsx'])
+    // Vérification de validité réelle : pour React/TS, un vrai parseur
+    // Babel ; pour HTML, une vérification structurelle dédiée. Si le code
+    // casse, on tente une auto-correction avant de livrer quoi que ce soit
+    // à l'utilisateur, au lieu de renvoyer une app cassée.
+    let syntaxCheck = framework === 'html' ? checkHtmlValidity(files[mainFileKey]) : checkSyntax(files[mainFileKey])
     if (!syntaxCheck.valid) {
-      logger.info(`Syntaxe invalide détectée, tentative d'auto-correction: ${syntaxCheck.error}`)
+      logger.info(`Contenu invalide détecté, tentative d'auto-correction: ${syntaxCheck.error}`)
       try {
         const { files: fixedFiles } = await editProject(
           files,
-          `Le fichier contient une erreur de syntaxe qui empêche toute compilation : "${syntaxCheck.error}". Corrige UNIQUEMENT cette erreur de syntaxe, sans rien changer d'autre au comportement du code.`
+          `Le fichier contient une erreur qui empêche son utilisation : "${syntaxCheck.error}". Corrige UNIQUEMENT cette erreur, sans rien changer d'autre au comportement du code.`
         )
-        const fixedMainKey = fixedFiles['/src/App.tsx'] ? '/src/App.tsx' : Object.keys(fixedFiles)[0]
-        const secondCheck = checkSyntax(fixedFiles[fixedMainKey])
+        const fixedMainKey = fixedFiles[mainFileKey] ? mainFileKey : Object.keys(fixedFiles)[0]
+        const secondCheck = framework === 'html' ? checkHtmlValidity(fixedFiles[fixedMainKey]) : checkSyntax(fixedFiles[fixedMainKey])
         if (secondCheck.valid) {
           files = fixedFiles
-          logger.info('Auto-correction de syntaxe réussie')
+          logger.info('Auto-correction réussie')
         } else {
           syntaxCheck = secondCheck
         }
       } catch (autoFixError) {
-        logger.error('Échec auto-correction syntaxe:', autoFixError)
+        logger.error('Échec auto-correction:', autoFixError)
       }
     }
 
@@ -433,4 +449,4 @@ export async function generateVoiceCommand(req: Request, res: Response) {
 function extractComponentName(code: string): string {
   const match = code.match(/export\s+default\s+function\s+(\w+)/)
   return match?.[1] || 'GeneratedComponent'
-    }
+        }
