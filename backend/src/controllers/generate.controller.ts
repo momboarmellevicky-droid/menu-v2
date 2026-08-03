@@ -1,5 +1,6 @@
 import { Request, Response } from 'express'
 import { runMultiAgentPipeline, generateFullStack, extractCodeBlock, extractFilesJson, editProject } from '../services/ai.service'
+import { checkSyntax } from '../services/syntaxValidator.service'
 import { explainError } from '../services/errorExplainer.service'
 import { repairCode } from '../services/codeRepair.service'
 import { getProjectMemory, updateProjectMemory, addComponentToMemory } from '../services/memory.service'
@@ -98,6 +99,34 @@ export async function generateCode(req: Request, res: Response) {
     const repair = await repairCode(generatedCode, framework === 'react' ? 'tsx' : framework)
     files['/src/App.tsx'] = repair.fixedCode
 
+    // Vérification syntaxique réelle : si le code casse (erreur de syntaxe
+    // venant de l'IA), on tente une auto-correction avant de livrer quoi
+    // que ce soit à l'utilisateur, au lieu de renvoyer une app cassée.
+    let syntaxCheck = checkSyntax(files['/src/App.tsx'])
+    if (!syntaxCheck.valid) {
+      logger.info(`Syntaxe invalide détectée, tentative d'auto-correction: ${syntaxCheck.error}`)
+      try {
+        const { files: fixedFiles } = await editProject(
+          files,
+          `Le fichier contient une erreur de syntaxe qui empêche toute compilation : "${syntaxCheck.error}". Corrige UNIQUEMENT cette erreur de syntaxe, sans rien changer d'autre au comportement du code.`
+        )
+        const fixedMainKey = fixedFiles['/src/App.tsx'] ? '/src/App.tsx' : Object.keys(fixedFiles)[0]
+        const secondCheck = checkSyntax(fixedFiles[fixedMainKey])
+        if (secondCheck.valid) {
+          files = fixedFiles
+          logger.info('Auto-correction de syntaxe réussie')
+        } else {
+          syntaxCheck = secondCheck
+        }
+      } catch (autoFixError) {
+        logger.error('Échec auto-correction syntaxe:', autoFixError)
+      }
+    }
+
+    if (!syntaxCheck.valid) {
+      throw new Error(`Erreur de syntaxe non corrigeable automatiquement: ${syntaxCheck.error}`)
+    }
+
     // Sauvegarder dans Supabase (avec timeout pour éviter un blocage silencieux)
     logger.info('Insertion Supabase generated_codes...')
     const insertPromise = supabaseAdmin
@@ -187,221 +216,3 @@ export async function editCode(req: Request, res: Response) {
 
     const { data: project } = await supabaseAdmin
       .from('projects')
-      .select('id, user_id')
-      .eq('id', projectId)
-      .eq('user_id', userId)
-      .maybeSingle()
-
-    if (!project) {
-      throw new AppError('Projet introuvable ou vous ne le possédez pas', 404)
-    }
-
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('credits')
-      .eq('id', userId)
-      .single()
-
-    if (!profile || profile.credits < 1) {
-      throw new AppError('Crédits insuffisants. Passez au plan Pro.', 403)
-    }
-
-    const { data: latestCode, error: latestError } = await supabaseAdmin
-      .from('generated_codes')
-      .select('files, code, language, framework, prompt')
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (latestError) throw latestError
-    if (!latestCode) {
-      throw new AppError('Aucun code existant à modifier pour ce projet. Générez-le d\'abord.', 400)
-    }
-
-    const existingFiles: Record<string, string> =
-      latestCode.files && Object.keys(latestCode.files).length > 0
-        ? latestCode.files
-        : { '/src/App.tsx': latestCode.code }
-
-    const { files: editedFiles, raw } = await editProject(existingFiles, instruction)
-
-    const mainKey = editedFiles['/src/App.tsx'] ? '/src/App.tsx' : Object.keys(editedFiles)[0]
-    const repair = await repairCode(editedFiles[mainKey], latestCode.language === 'tsx' ? 'tsx' : latestCode.language)
-    editedFiles[mainKey] = repair.fixedCode
-
-    const { data: codeRecord, error: insertError } = await supabaseAdmin
-      .from('generated_codes')
-      .insert({
-        project_id: projectId,
-        user_id: userId,
-        prompt: `Édition: ${instruction.slice(0, 100)}`,
-        code: repair.fixedCode,
-        files: editedFiles,
-        language: latestCode.language,
-        framework: latestCode.framework,
-        agent_logs: [{ agent: raw.agent, status: raw.status, timestamp: raw.timestamp }],
-      })
-      .select()
-      .single()
-
-    if (insertError) throw insertError
-
-    await supabaseAdmin
-      .from('profiles')
-      .update({ credits: profile.credits - 1 })
-      .eq('id', userId)
-
-    await updateProjectMemory(projectId, {
-      history: [{
-        id: crypto.randomUUID(),
-        type: 'edit',
-        description: `Édition: ${instruction.slice(0, 100)}`,
-        timestamp: new Date().toISOString(),
-        author: userId,
-      }]
-    })
-
-    res.json({
-      success: true,
-      code: repair.fixedCode,
-      files: editedFiles,
-      id: codeRecord.id,
-      projectId,
-      repair: {
-        fixed: repair.fixed,
-        warnings: repair.warnings,
-        errors: repair.errors,
-      },
-      creditsRemaining: profile.credits - 1,
-    })
-
-  } catch (error) {
-    logger.error('Erreur édition:', error)
-    if (error instanceof AppError) throw error
-    const rawMessage = error instanceof Error ? error.message : 'Erreur inconnue'
-    const explained = explainError(rawMessage)
-    res.status(500).json({ error: "Erreur d'édition", details: explained })
-  }
-}
-
-export async function generateFullStackProject(req: Request, res: Response) {
-  try {
-    const { prompt } = req.body
-    const userId = req.user!.id
-
-    if (!prompt) {
-      throw new AppError('Prompt requis', 400)
-    }
-
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('credits')
-      .eq('id', userId)
-      .single()
-
-    if (!profile || profile.credits < 3) {
-      throw new AppError('Crédits insuffisants pour Full Stack (3 requis)', 403)
-    }
-
-    const { data: project, error: projectError } = await supabaseAdmin
-      .from('projects')
-      .insert({
-        user_id: userId,
-        name: prompt.slice(0, 50),
-        description: prompt,
-        architecture: 'fullstack',
-        status: 'generating',
-      })
-      .select()
-      .single()
-
-    if (projectError) throw projectError
-
-    const result = await generateFullStack(prompt)
-
-    await supabaseAdmin.from('generated_codes').insert([
-      {
-        project_id: project.id,
-        user_id: userId,
-        prompt: `${prompt} - Frontend`,
-        code: result.frontend,
-        language: 'tsx',
-        framework: 'react',
-      },
-      {
-        project_id: project.id,
-        user_id: userId,
-        prompt: `${prompt} - Backend`,
-        code: result.backend,
-        language: 'ts',
-        framework: 'node',
-      },
-      {
-        project_id: project.id,
-        user_id: userId,
-        prompt: `${prompt} - Database`,
-        code: result.database,
-        language: 'sql',
-        framework: 'postgresql',
-      },
-    ])
-
-    await supabaseAdmin
-      .from('projects')
-      .update({ status: 'completed' })
-      .eq('id', project.id)
-
-    await supabaseAdmin
-      .from('profiles')
-      .update({ credits: profile.credits - 3 })
-      .eq('id', userId)
-
-    res.json({
-      success: true,
-      projectId: project.id,
-      frontend: result.frontend,
-      backend: result.backend,
-      database: result.database,
-      agents: result.agents.map(a => ({
-        name: a.agent,
-        status: a.status,
-      })),
-      creditsRemaining: profile.credits - 3,
-    })
-
-  } catch (error) {
-    logger.error('Erreur Full Stack:', error)
-    if (error instanceof AppError) throw error
-    const rawMessage = error instanceof Error ? error.message : 'Erreur inconnue'
-    const explained = explainError(rawMessage)
-    res.status(500).json({ error: 'Erreur génération Full Stack', details: explained })
-  }
-}
-
-export async function generateVoiceCommand(req: Request, res: Response) {
-  try {
-    const { transcript } = req.body
-
-    if (!transcript) {
-      throw new AppError('Transcription requise', 400)
-    }
-
-    const { generateVoiceCommand } = await import('../services/ai.service')
-    const structuredPrompt = await generateVoiceCommand(transcript)
-
-    res.json({
-      success: true,
-      original: transcript,
-      structured: structuredPrompt,
-    })
-  } catch (error) {
-    logger.error('Erreur voice command:', error)
-    res.status(500).json({ error: 'Erreur traitement vocal' })
-  }
-}
-
-function extractComponentName(code: string): string {
-  const match = code.match(/export\s+default\s+function\s+(\w+)/)
-  return match?.[1] || 'GeneratedComponent'
-      }
