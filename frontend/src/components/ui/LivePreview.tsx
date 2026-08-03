@@ -5,6 +5,7 @@ import { Terminal, Eye } from 'lucide-react'
 interface LivePreviewProps {
   code: string
   files?: Record<string, string>
+  framework?: 'react' | 'html'
 }
 
 const TAILWIND_INDEX_HTML = `<!DOCTYPE html>
@@ -79,7 +80,31 @@ function detectNpmDependencies(code: string): Record<string, string> {
   return deps
 }
 
-export default function LivePreview({ code, files }: LivePreviewProps) {
+export default function LivePreview({ code, files, framework = 'react' }: LivePreviewProps) {
+  if (framework === 'html') {
+    const htmlContent = files?.['/index.html'] || code
+    return (
+      <div className="rounded-2xl overflow-hidden border border-border bg-bg-card">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-bg/50">
+          <div className="flex items-center gap-2 text-sm text-text-muted">
+            <Eye size={16} />
+            Aperçu en direct
+          </div>
+        </div>
+        <iframe
+          title="Aperçu HTML"
+          srcDoc={htmlContent}
+          sandbox="allow-scripts allow-forms allow-popups allow-modals"
+          style={{ width: '100%', height: '480px', border: 'none', background: 'white' }}
+        />
+      </div>
+    )
+  }
+
+  return <LivePreviewReact code={code} files={files} />
+}
+
+function LivePreviewReact({ code, files }: { code: string; files?: Record<string, string> }) {
   const [showConsole, setShowConsole] = useState(false)
 
   const hasMultiFiles = files && Object.keys(files).length > 1
@@ -149,4 +174,4 @@ export default function LivePreview({ code, files }: LivePreviewProps) {
       </SandpackProvider>
     </div>
   )
-}
+    }
