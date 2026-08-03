@@ -122,7 +122,43 @@ export default function GeneratePage() {
       setDeploying(false)
     }
   }
-  </button>
+
+  const diagnostics = currentCode?.diagnostics || []
+  const criticalCount = diagnostics.filter(d => d.severity === 'critical').length
+  const warningCount = diagnostics.filter(d => d.severity === 'warning').length
+
+  return (
+    <div className="min-h-screen pt-24 px-4 pb-10 max-w-6xl mx-auto relative z-10">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-3xl font-bold mb-1">
+              <span className="bg-gradient-to-r from-secondary to-primary bg-clip-text text-transparent">
+                Générer du code
+              </span>
+            </h1>
+            <p className="text-text-muted">Décrivez votre application, les agents IA s'occupent du reste.</p>
+          </div>
+          <MemoryBadge />
+        </div>
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          {architectureModes.map((mode) => (
+            <button
+              key={mode.id}
+              onClick={() => setArchitecture(mode.id)}
+              className={`p-4 rounded-xl border text-left transition-all ${
+                architecture === mode.id
+                  ? 'border-primary/50 bg-primary/10'
+                  : 'border-border bg-bg-card hover:border-primary/30'
+              }`}
+            >
+              <mode.icon size={20} className={architecture === mode.id ? 'text-primary' : 'text-text-muted'} />
+              <div className="font-medium text-sm mt-2">{mode.label}</div>
+              <div className="text-xs text-text-muted mt-1">{mode.desc}</div>
+            </button>
           ))}
         </div>
 
@@ -282,7 +318,7 @@ export default function GeneratePage() {
                     }`}
                   >
                     Code
-                    </button>
+                  </button>
                 </div>
                 <div className="flex gap-2 items-center flex-wrap">
                   <span className="px-3 py-1 bg-primary/10 text-primary text-xs rounded-lg border border-primary/20">
@@ -399,68 +435,4 @@ export default function GeneratePage() {
                         <button
                           key={path}
                           onClick={() => setSelectedFile(path)}
-                          className={`px-2.5 py-1 text-xs rounded-lg border font-mono transition-colors ${
-                          (selectedFile || Object.keys(currentCode.files!)[0]) === path
-                            ? 'border-primary/50 bg-primary/10 text-primary'
-                            : 'border-border bg-bg-card text-text-muted hover:border-primary/30'
-                        }`}
-                      >
-                        {path}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <CodeBlock
-                  code={
-                    currentCode.files && Object.keys(currentCode.files).length > 0
-                      ? currentCode.files[selectedFile || Object.keys(currentCode.files)[0]]
-                      : currentCode.code
-                  }
-                  language={currentCode.language}
-                  filename={selectedFile || `component.${currentCode.language}`}
-                />
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  </div>
-)
-                                }
-
-  const diagnostics = currentCode?.diagnostics || []
-  const criticalCount = diagnostics.filter(d => d.severity === 'critical').length
-  const warningCount = diagnostics.filter(d => d.severity === 'warning').length
-
-  return (
-    <div className="min-h-screen pt-24 px-4 pb-10 max-w-6xl mx-auto relative z-10">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-3xl font-bold mb-1">
-              <span className="bg-gradient-to-r from-secondary to-primary bg-clip-text text-transparent">
-                Générer du code
-              </span>
-            </h1>
-            <p className="text-text-muted">Décrivez votre application, les agents IA s'occupent du reste.</p>
-          </div>
-          <MemoryBadge />
-        </div>
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          {architectureModes.map((mode) => (
-            <button
-              key={mode.id}
-              onClick={() => setArchitecture(mode.id)}
-              className={`p-4 rounded-xl border text-left transition-all ${
-                architecture === mode.id
-                  ? 'border-primary/50 bg-primary/10'
-                  : 'border-border bg-bg-card hover:border-primary/30'
-              }`}
-            >
-              <mode.icon size={20} className={architecture === mode.id ? 'text-primary' : 'text-text-muted'} />
-              <div className="font-medium text-sm mt-2">{mode.label}</div>
-              <div className="text-xs text-text-muted mt-1">{mode.desc}</div>
+                         
