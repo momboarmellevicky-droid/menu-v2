@@ -435,4 +435,33 @@ export default function GeneratePage() {
                         <button
                           key={path}
                           onClick={() => setSelectedFile(path)}
+                          className={`px-2.5 py-1 text-xs rounded-lg border font-mono transition-colors ${
+                          (selectedFile || Object.keys(currentCode.files!)[0]) === path
+                            ? 'border-primary/50 bg-primary/10 text-primary'
+                            : 'border-border bg-bg-card text-text-muted hover:border-primary/30'
+                        }`}
+                      >
+                        {path}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <CodeBlock
+                  code={
+                    currentCode.files && Object.keys(currentCode.files).length > 0
+                      ? currentCode.files[selectedFile || Object.keys(currentCode.files)[0]]
+                      : currentCode.code
+                  }
+                  language={currentCode.language}
+                  filename={selectedFile || `component.${currentCode.language}`}
+                />
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  </div>
+)
+}
                          
