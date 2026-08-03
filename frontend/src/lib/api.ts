@@ -47,6 +47,68 @@ class ApiClient {
     return response.json()
   }
 
+  // Flux SSE réel (remplace la barre de progression simulée côté client) :
+  // EventSource natif ne supporte pas POST + header Authorization, donc on
+  // lit le flux "text/event-stream" nous-mêmes via fetch + ReadableStream.
+  private async requestStream<T>(
+    endpoint: string,
+    body: unknown,
+    onProgress: (agent: string, progress: number) => void
+  ): Promise<T> {
+    const token = await this.getToken()
+
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: JSON.stringify(body),
+    })
+
+    if (!response.ok || !response.body) {
+      let error: { error?: string; reason?: string; details?: ExplainedError } = {}
+      try { error = await response.json() } catch { /* réponse non-JSON */ }
+      const message = error.reason ? `${error.error} (${error.reason})` : error.error || `HTTP ${response.status}`
+      throw new ApiError(message, error.details)
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+
+      let sepIndex: number
+      while ((sepIndex = buffer.indexOf('\n\n')) !== -1) {
+        const rawEvent = buffer.slice(0, sepIndex)
+        buffer = buffer.slice(sepIndex + 2)
+
+        let eventName = 'message'
+        let dataLine = ''
+        for (const line of rawEvent.split('\n')) {
+          if (line.startsWith('event: ')) eventName = line.slice(7)
+          else if (line.startsWith('data: ')) dataLine = line.slice(6)
+        }
+        if (!dataLine) continue
+        const data = JSON.parse(dataLine)
+
+        if (eventName === 'progress') {
+          onProgress(data.agent, data.progress)
+        } else if (eventName === 'error') {
+          throw new ApiError(data.error || 'Erreur de génération', data.details)
+        } else if (eventName === 'done') {
+          return data as T
+        }
+      }
+    }
+
+    throw new ApiError('Flux interrompu avant la fin de la génération')
+  }
+
   async signUp(email: string, password: string, fullName: string) {
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -99,8 +161,13 @@ class ApiClient {
     if (error) throw error
   }
 
-  async generateCode(prompt: string, framework: string = 'react', projectId?: string) {
-    return this.request<{
+  async generateCode(
+    prompt: string,
+    onProgress: (agent: string, progress: number) => void,
+    framework: string = 'react',
+    projectId?: string
+  ) {
+    return this.requestStream<{
       success: boolean
       code: string
       files: Record<string, string>
@@ -109,14 +176,15 @@ class ApiClient {
       agents: { name: string; status: string }[]
       repair: { fixed: boolean; warnings: string[]; errors: string[]; diagnostics: import('../types').DiagnosticEntry[] }
       creditsRemaining: number
-    }>('/generate', {
-      method: 'POST',
-      body: JSON.stringify({ prompt, framework, projectId }),
-    })
+    }>('/generate', { prompt, framework, projectId }, onProgress)
   }
 
-  async editCode(projectId: string, instruction: string) {
-    return this.request<{
+  async editCode(
+    projectId: string,
+    instruction: string,
+    onProgress: (agent: string, progress: number) => void
+  ) {
+    return this.requestStream<{
       success: boolean
       code: string
       files: Record<string, string>
@@ -124,14 +192,11 @@ class ApiClient {
       projectId: string
       repair: { fixed: boolean; warnings: string[]; errors: string[]; diagnostics: import('../types').DiagnosticEntry[] }
       creditsRemaining: number
-    }>('/generate/edit', {
-      method: 'POST',
-      body: JSON.stringify({ projectId, instruction }),
-    })
+    }>('/generate/edit', { projectId, instruction }, onProgress)
   }
 
-  async generateFullStack(prompt: string) {
-    return this.request<{
+  async generateFullStack(prompt: string, onProgress: (agent: string, progress: number) => void) {
+    return this.requestStream<{
       success: boolean
       projectId: string
       frontend: string
@@ -139,10 +204,7 @@ class ApiClient {
       database: string
       agents: { name: string; status: string }[]
       creditsRemaining: number
-    }>('/generate/fullstack', {
-      method: 'POST',
-      body: JSON.stringify({ prompt }),
-    })
+    }>('/generate/fullstack', { prompt }, onProgress)
   }
 
   async processVoiceCommand(transcript: string) {

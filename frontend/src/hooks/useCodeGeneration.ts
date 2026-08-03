@@ -24,38 +24,32 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
   const [error, setError] = useState<string | null>(null)
   const [errorDetails, setErrorDetails] = useState<ExplainedError | null>(null)
   const { addToHistory, setCurrentCode, currentCode } = useCodeStore()
-  const progressTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const startFakeProgress = useCallback(() => {
-    setAgents(AGENT_NAMES.map((name, i) => ({ name, status: i === 0 ? 'working' : 'waiting', progress: 0 })))
+  // Progression réelle : reçoit les événements 'progress' envoyés par le
+  // backend au fur et à mesure que chaque agent termine réellement son
+  // travail (plus de simulation par setInterval côté client).
+  const initAgents = useCallback((names: string[]) => {
+    setAgents(names.map((name, i) => ({ name, status: i === 0 ? 'working' : 'waiting', progress: 0 })))
     setProgress(0)
-    let step = 0
-    progressTimer.current = setInterval(() => {
-      step += 1
-      const pct = Math.min(90, step * 4)
-      setProgress(pct)
-      const activeIdx = Math.min(AGENT_NAMES.length - 1, Math.floor((pct / 90) * AGENT_NAMES.length))
-      setAgents(prev => prev.map((a, idx) => (
-        idx < activeIdx ? { ...a, status: 'completed', progress: 100 } :
-        idx === activeIdx ? { ...a, status: 'working', progress: (pct % (90 / AGENT_NAMES.length)) * AGENT_NAMES.length } :
-        a
-      )))
-    }, 250)
   }, [])
 
-  const startSimpleProgress = useCallback(() => {
-    setAgents([{ name: 'Éditeur', status: 'working', progress: 0 }])
-    setProgress(0)
-    let step = 0
-    progressTimer.current = setInterval(() => {
-      step += 1
-      const pct = Math.min(90, step * 8)
-      setProgress(pct)
-    }, 250)
+  const handleRealProgress = useCallback((agent: string, pct: number) => {
+    setProgress(pct)
+    setAgents(prev => {
+      const idx = prev.findIndex(a => a.name === agent)
+      if (idx === -1) {
+        // Agent non prévu au départ (ex: "Correction automatique") : on l'ajoute.
+        return [...prev.map(a => ({ ...a, status: 'completed', progress: 100 })), { name: agent, status: 'working', progress: pct }]
+      }
+      return prev.map((a, i) => (
+        i < idx ? { ...a, status: 'completed', progress: 100 } :
+        i === idx ? { ...a, status: 'working', progress: pct } :
+        a
+      ))
+    })
   }, [])
 
   const finishProgress = useCallback((realAgents?: { name: string; status: string }[]) => {
-    if (progressTimer.current) clearInterval(progressTimer.current)
     setProgress(100)
     if (realAgents && realAgents.length > 0) {
       setAgents(realAgents.map(a => ({ name: a.name, status: a.status || 'completed', progress: 100 })))
@@ -65,7 +59,6 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
   }, [])
 
   const handleGenerationError = (err: unknown) => {
-    if (progressTimer.current) clearInterval(progressTimer.current)
     setProgress(0)
     setAgents([])
     if (err instanceof ApiError) {
@@ -81,10 +74,10 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
     setIsGenerating(true)
     setError(null)
     setErrorDetails(null)
-    startFakeProgress()
+    initAgents(AGENT_NAMES)
 
     try {
-      const result = await api.generateCode(prompt, framework, projectId)
+      const result = await api.generateCode(prompt, handleRealProgress, framework, projectId)
 
       const code: GeneratedCode = {
         id: result.id,
@@ -106,16 +99,16 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
     } finally {
       setIsGenerating(false)
     }
-  }, [startFakeProgress, finishProgress, setCurrentCode, addToHistory])
+  }, [initAgents, handleRealProgress, finishProgress, setCurrentCode, addToHistory])
 
   const generateFullStack = useCallback(async (prompt: string) => {
     setIsGenerating(true)
     setError(null)
     setErrorDetails(null)
-    startFakeProgress()
+    initAgents(AGENT_NAMES)
 
     try {
-      const result = await api.generateFullStack(prompt)
+      const result = await api.generateFullStack(prompt, handleRealProgress)
 
       const frontend: GeneratedCode = {
         id: `${result.projectId}-frontend`,
@@ -155,17 +148,17 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
     } finally {
       setIsGenerating(false)
     }
-  }, [startFakeProgress, finishProgress, setCurrentCode, addToHistory])
+  }, [initAgents, handleRealProgress, finishProgress, setCurrentCode, addToHistory])
 
   const editCurrentProject = useCallback(async (instruction: string) => {
     if (!currentCode?.projectId) return
     setIsGenerating(true)
     setError(null)
     setErrorDetails(null)
-    startSimpleProgress()
+    initAgents(['Éditeur'])
 
     try {
-      const result = await api.editCode(currentCode.projectId, instruction)
+      const result = await api.editCode(currentCode.projectId, instruction, handleRealProgress)
 
       const code: GeneratedCode = {
         id: result.id,
@@ -187,7 +180,7 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
     } finally {
       setIsGenerating(false)
     }
-  }, [currentCode, startSimpleProgress, finishProgress, setCurrentCode, addToHistory])
+  }, [currentCode, initAgents, handleRealProgress, finishProgress, setCurrentCode, addToHistory])
 
   return { isGenerating, progress, agents, currentCode, error, errorDetails, generate, generateFullStack, editCurrentProject }
                                              }

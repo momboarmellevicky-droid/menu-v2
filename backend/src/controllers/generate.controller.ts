@@ -9,6 +9,26 @@ import { logger } from '../utils/logger'
 import { generateCodeSchema, editCodeSchema } from '../utils/validators'
 import { AppError } from '../middleware/error.middleware'
 
+// Canal SSE réel : remplace la barre de progression simulée côté client.
+// startSSE ouvre le flux, sendEvent pousse chaque étape au fur et à mesure
+// qu'elle se produit réellement côté serveur (plus de simulation par
+// setInterval côté frontend), endSSE ferme la connexion.
+function startSSE(res: Response) {
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache, no-transform')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.flushHeaders()
+}
+
+function sendEvent(res: Response, event: string, data: unknown) {
+  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+}
+
+function endSSE(res: Response) {
+  res.end()
+}
+
 export async function generateCode(req: Request, res: Response) {
   try {
     const validated = generateCodeSchema.parse(req.body)
@@ -52,6 +72,12 @@ export async function generateCode(req: Request, res: Response) {
     // Récupérer la mémoire du projet
     const memory = await getProjectMemory(currentProjectId)
 
+    // À partir d'ici la réponse devient un flux SSE réel : chaque étape est
+    // poussée au frontend au moment où elle se produit réellement côté
+    // serveur (remplace la barre de progression simulée côté client).
+    startSSE(res)
+    sendEvent(res, 'progress', { agent: 'Analyste', progress: 0 })
+
     // Génération avec les agents — le format choisi (React ou HTML) est
     // désormais réellement transmis et influence quel agent Développeur
     // est utilisé (auparavant ce choix était ignoré, du React était
@@ -62,6 +88,7 @@ export async function generateCode(req: Request, res: Response) {
       memory || undefined,
       (agent, progress) => {
         logger.info(`Progress: ${agent} - ${progress}%`)
+        sendEvent(res, 'progress', { agent, progress })
       },
       framework === 'html' ? 'html' : 'react'
     )
@@ -121,6 +148,7 @@ export async function generateCode(req: Request, res: Response) {
     let syntaxCheck = framework === 'html' ? checkHtmlValidity(files[mainFileKey]) : checkSyntax(files[mainFileKey])
     if (!syntaxCheck.valid) {
       logger.info(`Contenu invalide détecté, tentative d'auto-correction: ${syntaxCheck.error}`)
+      sendEvent(res, 'progress', { agent: 'Correction automatique', progress: 97 })
       try {
         const { files: fixedFiles } = await editProject(
           files,
@@ -197,7 +225,7 @@ export async function generateCode(req: Request, res: Response) {
       }]
     })
 
-    res.json({
+    sendEvent(res, 'done', {
       success: true,
       code: repair.fixedCode,
       files,
@@ -215,12 +243,20 @@ export async function generateCode(req: Request, res: Response) {
       },
       creditsRemaining: profile.credits - cost,
     })
+    endSSE(res)
 
   } catch (error) {
     logger.error('Erreur génération:', error)
-    if (error instanceof AppError) throw error
     const rawMessage = error instanceof Error ? error.message : 'Erreur inconnue'
     const explained = explainError(rawMessage)
+    if (res.headersSent) {
+      // Le flux SSE est déjà ouvert : impossible d'envoyer un statut HTTP,
+      // on pousse l'erreur comme événement et on ferme le flux.
+      sendEvent(res, 'error', { error: 'Erreur de génération', details: explained })
+      endSSE(res)
+      return
+    }
+    if (error instanceof AppError) throw error
     res.status(500).json({ error: 'Erreur de génération', details: explained })
   }
 }
@@ -269,7 +305,13 @@ export async function editCode(req: Request, res: Response) {
         ? latestCode.files
         : { '/src/App.tsx': latestCode.code }
 
+    // Édition = un seul agent (pas de pipeline multi-étapes), mais le flux
+    // SSE reste réel : un événement au démarrage, un événement 'done' à la fin.
+    startSSE(res)
+    sendEvent(res, 'progress', { agent: 'Éditeur', progress: 20 })
+
     const { files: editedFiles, raw } = await editProject(existingFiles, instruction)
+    sendEvent(res, 'progress', { agent: 'Éditeur', progress: 90 })
 
     const mainKey = editedFiles['/src/App.tsx'] ? '/src/App.tsx' : Object.keys(editedFiles)[0]
     const repair = await repairCode(editedFiles[mainKey], latestCode.language === 'tsx' ? 'tsx' : latestCode.language)
@@ -307,7 +349,7 @@ export async function editCode(req: Request, res: Response) {
       }]
     })
 
-    res.json({
+    sendEvent(res, 'done', {
       success: true,
       code: repair.fixedCode,
       files: editedFiles,
@@ -320,12 +362,18 @@ export async function editCode(req: Request, res: Response) {
       },
       creditsRemaining: profile.credits - 1,
     })
+    endSSE(res)
 
   } catch (error) {
     logger.error('Erreur édition:', error)
-    if (error instanceof AppError) throw error
     const rawMessage = error instanceof Error ? error.message : 'Erreur inconnue'
     const explained = explainError(rawMessage)
+    if (res.headersSent) {
+      sendEvent(res, 'error', { error: "Erreur d'édition", details: explained })
+      endSSE(res)
+      return
+    }
+    if (error instanceof AppError) throw error
     res.status(500).json({ error: "Erreur d'édition", details: explained })
   }
 }
@@ -363,7 +411,13 @@ export async function generateFullStackProject(req: Request, res: Response) {
 
     if (projectError) throw projectError
 
-    const result = await generateFullStack(prompt)
+    startSSE(res)
+    sendEvent(res, 'progress', { agent: 'Analyste', progress: 0 })
+
+    const result = await generateFullStack(prompt, undefined, (agent, progress) => {
+      logger.info(`Progress Full Stack: ${agent} - ${progress}%`)
+      sendEvent(res, 'progress', { agent, progress })
+    })
 
     await supabaseAdmin.from('generated_codes').insert([
       {
@@ -402,7 +456,7 @@ export async function generateFullStackProject(req: Request, res: Response) {
       .update({ credits: profile.credits - 3 })
       .eq('id', userId)
 
-    res.json({
+    sendEvent(res, 'done', {
       success: true,
       projectId: project.id,
       frontend: result.frontend,
@@ -414,12 +468,18 @@ export async function generateFullStackProject(req: Request, res: Response) {
       })),
       creditsRemaining: profile.credits - 3,
     })
+    endSSE(res)
 
   } catch (error) {
     logger.error('Erreur Full Stack:', error)
-    if (error instanceof AppError) throw error
     const rawMessage = error instanceof Error ? error.message : 'Erreur inconnue'
     const explained = explainError(rawMessage)
+    if (res.headersSent) {
+      sendEvent(res, 'error', { error: 'Erreur génération Full Stack', details: explained })
+      endSSE(res)
+      return
+    }
+    if (error instanceof AppError) throw error
     res.status(500).json({ error: 'Erreur génération Full Stack', details: explained })
   }
 }
