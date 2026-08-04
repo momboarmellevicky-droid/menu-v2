@@ -2,3 +2,7 @@ node_modules/
 dist/
 *.tsbuildinfo
 .env
+# Fichiers .d.ts générés par erreur par "tsc -b" dans src (garder vite-env.d.ts, écrit à la main)
+frontend/src/**/*.d.ts
+!frontend/src/vite-env.d.ts
+package-lock.json

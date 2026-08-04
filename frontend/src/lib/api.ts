@@ -274,6 +274,28 @@ class ApiClient {
     return this.request(`/team/${projectId}/${userId}`, { method: 'DELETE' })
   }
 
+  async startSubscriptionPayment(plan: 'pro' | 'team', phoneNumber: string, operator: 'airtel' | 'moov') {
+    return this.request<{
+      success: boolean
+      status: 'pending' | 'success' | 'failed'
+      message_fr: string
+      message_en: string
+      reference: string
+    }>('/payment/start', {
+      method: 'POST',
+      body: JSON.stringify({ plan, phoneNumber, operator }),
+    })
+  }
+
+  async getSubscriptionPaymentStatus(reference: string) {
+    return this.request<{
+      success: boolean
+      status: 'pending' | 'success' | 'failed'
+      message_fr: string
+      message_en: string
+    }>(`/payment/status/${reference}`)
+  }
+
   async getProfile() {
     return this.request('/auth/profile')
   }

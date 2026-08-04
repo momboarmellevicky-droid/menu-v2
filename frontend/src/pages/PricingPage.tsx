@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Check, Sparkles } from 'lucide-react'
+import PaymentModal from '../components/PaymentModal'
 
 const plans = [
   {
@@ -19,6 +21,7 @@ const plans = [
   {
     name: 'Pro',
     priceUsd: 19,
+    priceFcfa: 11590,
     tagline: 'Pour un usage régulier',
     credits: '300 crédits / mois',
     features: [
@@ -47,6 +50,8 @@ const plans = [
 ]
 
 export default function PricingPage() {
+  const [paymentPlan, setPaymentPlan] = useState<'pro' | null>(null)
+
   return (
     <div className="min-h-screen pt-24 px-4 pb-16 max-w-5xl mx-auto relative z-10">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
@@ -96,14 +101,17 @@ export default function PricingPage() {
                   </li>
                 ))}
               </ul>
-              {plan.highlighted || plan.name === 'Équipe' ? (
+              {plan.highlighted ? (
+                <button
+                  onClick={() => setPaymentPlan('pro')}
+                  className="block text-center w-full py-2.5 rounded-xl text-sm font-semibold transition-colors bg-gradient-to-r from-primary to-secondary text-white hover:opacity-90"
+                >
+                  {plan.cta}
+                </button>
+              ) : plan.name === 'Équipe' ? (
                 <a
                   href={`mailto:contact@menu-app.com?subject=${encodeURIComponent(`Demande d'accès au plan ${plan.name}`)}`}
-                  className={`block text-center w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${
-                    plan.highlighted
-                      ? 'bg-gradient-to-r from-primary to-secondary text-white hover:opacity-90'
-                      : 'bg-white/5 text-white hover:bg-white/10 border border-border'
-                  }`}
+                  className="block text-center w-full py-2.5 rounded-xl text-sm font-semibold transition-colors bg-white/5 text-white hover:bg-white/10 border border-border"
                 >
                   {plan.cta}
                 </a>
@@ -120,10 +128,24 @@ export default function PricingPage() {
         </div>
 
         <p className="text-center text-xs text-text-muted mt-10">
-          Les taux de conversion FCFA/EUR affichés sont indicatifs et peuvent varier. Le
-          paiement en ligne sera bientôt disponible directement depuis cette page.
+          Les taux de conversion FCFA/EUR affichés sont indicatifs et peuvent varier. Paiement
+          Mobile Money (Airtel Money / Moov Money) via SingPay, aucune donnée de carte bancaire
+          n'est demandée.
         </p>
       </motion.div>
+
+      {paymentPlan && (
+        <PaymentModal
+          plan={paymentPlan}
+          planLabel="Pro"
+          priceFcfa={plans.find((p) => p.name === 'Pro')!.priceFcfa!}
+          onClose={() => setPaymentPlan(null)}
+          onSuccess={() => {
+            setPaymentPlan(null)
+            window.location.reload()
+          }}
+        />
+      )}
     </div>
   )
 }

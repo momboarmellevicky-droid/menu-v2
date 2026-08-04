@@ -9,6 +9,7 @@ import projectRoutes from './routes/project.routes'
 import marketplaceRoutes from './routes/marketplace.routes'
 import deployRoutes from './routes/deploy.routes'
 import teamRoutes from './routes/team.routes'
+import paymentRoutes from './routes/payment.routes'
 
 const app = express()
 
@@ -43,6 +44,7 @@ app.use('/api/projects', projectRoutes)
 app.use('/api/marketplace', marketplaceRoutes)
 app.use('/api/deploy', deployRoutes)
 app.use('/api/team', teamRoutes)
+app.use('/api/payment', paymentRoutes)
 
 // Health check
 app.get('/health', (req, res) => {
