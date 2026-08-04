@@ -62,13 +62,15 @@ RÈGLES STRICTES :
 - Chaque composant importe correctement ses dépendances depuis les autres fichiers du projet (chemins relatifs cohérents, ex: import Board from './components/Board')
 - Génère le code COMPLET et FONCTIONNEL de chaque fichier, pas de placeholders
 
-FORMAT DE RÉPONSE OBLIGATOIRE — JSON STRICT UNIQUEMENT :
-Réponds UNIQUEMENT avec un objet JSON valide (rien avant, rien après, pas de markdown) où chaque clé est un chemin de fichier et chaque valeur le contenu complet du fichier :
-{
-  "/src/App.tsx": "contenu complet du fichier...",
-  "/src/components/Board.tsx": "contenu complet du fichier..."
-}
-Minimum 2 fichiers, maximum 6 fichiers. Le fichier racine doit obligatoirement s'appeler "/src/App.tsx" et exporter un composant par défaut.`,
+FORMAT DE RÉPONSE OBLIGATOIRE :
+Réponds UNIQUEMENT avec les fichiers séparés par ce marqueur exact, sans JSON, sans échappement, code brut tel qu'il doit apparaître dans le fichier :
+###FILE:/src/App.tsx###
+(contenu complet et brut du fichier ici, avec ses vrais guillemets et retours à la ligne)
+###ENDFILE###
+###FILE:/src/components/Board.tsx###
+(contenu complet et brut du fichier ici)
+###ENDFILE###
+Minimum 2 fichiers, maximum 6 fichiers. Le fichier racine doit obligatoirement s'appeler "/src/App.tsx" et exporter un composant par défaut. Rien avant le premier ###FILE:, rien après le dernier ###ENDFILE###.`,
   },
   {
     id: 'tester',
@@ -86,13 +88,13 @@ Réponds UNIQUEMENT en JSON valide.`,
     id: 'optimizer',
     name: 'Optimiseur',
     role: 'optimizer',
-    systemPrompt: `Tu es un expert performance. Ta seule tâche est de reprendre le projet multi-fichiers fourni (format JSON: chemin de fichier -> contenu) et de l'optimiser (performance, lisibilité, accessibilité) sans en changer le comportement ni la structure de fichiers.
+    systemPrompt: `Tu es un expert performance. Ta seule tâche est de reprendre le projet multi-fichiers fourni (fichiers séparés par ###FILE:chemin### ... ###ENDFILE###) et de l'optimiser (performance, lisibilité, accessibilité) sans en changer le comportement ni la structure de fichiers.
 
-FORMAT DE RÉPONSE OBLIGATOIRE — JSON STRICT UNIQUEMENT :
-- Réponds UNIQUEMENT avec le MÊME objet JSON (mêmes clés de fichiers), avec le contenu optimisé
-- Aucun texte avant, aucun texte après, aucune explication, aucune métrique, aucune phrase de conversation
-- Si tu n'as aucune optimisation à apporter, renvoie l'objet JSON original tel quel
-- Ne retire et n'ajoute aucun fichier, garde exactement les mêmes clés`,
+FORMAT DE RÉPONSE OBLIGATOIRE :
+- Réponds UNIQUEMENT avec les MÊMES fichiers (mêmes chemins), au même format ###FILE:chemin### / ###ENDFILE###, code brut sans échappement, avec le contenu optimisé
+- Aucun texte avant le premier ###FILE:, aucun texte après le dernier ###ENDFILE###, aucune explication, aucune métrique, aucune phrase de conversation
+- Si tu n'as aucune optimisation à apporter, renvoie les fichiers originaux tels quels
+- Ne retire et n'ajoute aucun fichier, garde exactement les mêmes chemins`,
   },
 ]
 
@@ -377,7 +379,34 @@ export function extractCodeBlock(text: string, language: string): string | null 
   return matches.length > 0 ? matches.map(m => m[1].trim()).join('\n\n') : null
 }
 
+// Parseur du format à balises ###FILE:chemin### ... ###ENDFILE### — remplace
+// le JSON brut comme format d'échange multi-fichiers. Le JSON exigeait que le
+// modèle échappe correctement chaque guillemet/retour à ligne/backslash à
+// l'intérieur du code généré ; le moindre oubli (fréquent sur du code
+// contenant lui-même des guillemets et des template literals) rendait tout
+// le JSON.parse invalide et faisait échouer toute la génération avec une
+// erreur de syntaxe, sans qu'aucun repli ne puisse la récupérer. Le format à
+// balises transporte le code tel quel, sans ré-encodage, donc rien à casser.
+export function extractFilesTagged(text: string): Record<string, string> | null {
+  const regex = /###FILE:(.+?)###\r?\n([\s\S]*?)###ENDFILE###/g
+  const files: Record<string, string> = {}
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(text)) !== null) {
+    const path = match[1].trim()
+    const content = match[2].replace(/\r?\n$/, '')
+    if (path.startsWith('/') && content.length > 0) {
+      files[path] = content
+    }
+  }
+  return Object.keys(files).length > 0 ? files : null
+}
+
 export function extractFilesJson(text: string): Record<string, string> | null {
+  const tagged = extractFilesTagged(text)
+  if (tagged) return tagged
+
+  // Repli JSON conservé uniquement pour d'éventuels résultats déjà en cache
+  // Redis générés avant ce changement de format.
   const tryParse = (raw: string): Record<string, string> | null => {
     try {
       const parsed = JSON.parse(raw)
@@ -442,12 +471,12 @@ RÈGLES STRICTES :
 - Si l'instruction nécessite un nouveau fichier, ajoute-le en conservant les fichiers existants
 - Le code doit rester complet et fonctionnel après modification
 
-FORMAT DE RÉPONSE OBLIGATOIRE — JSON STRICT UNIQUEMENT :
-Réponds UNIQUEMENT avec l'objet JSON complet du projet (mêmes clés que fourni, valeurs mises à jour), rien avant, rien après, pas de markdown.`,
+FORMAT DE RÉPONSE OBLIGATOIRE :
+Réponds UNIQUEMENT avec les fichiers complets du projet (mêmes chemins que fourni, contenu mis à jour), séparés par ###FILE:chemin### ... ###ENDFILE###, code brut sans échappement JSON. Rien avant le premier ###FILE:, rien après le dernier ###ENDFILE###, pas de markdown.`,
   }
 
-  const input = `PROJET ACTUEL (JSON: chemin de fichier -> contenu) :
-${JSON.stringify(existingFiles, null, 2)}
+  const input = `PROJET ACTUEL (fichiers séparés par ###FILE:chemin### ... ###ENDFILE###) :
+${Object.entries(existingFiles).map(([path, content]) => `###FILE:${path}###\n${content}\n###ENDFILE###`).join('\n')}
 
 INSTRUCTION DE MODIFICATION DEMANDÉE PAR L'UTILISATEUR :
 ${instruction}

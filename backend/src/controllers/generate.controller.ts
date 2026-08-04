@@ -419,6 +419,27 @@ export async function generateFullStackProject(req: Request, res: Response) {
       sendEvent(res, 'progress', { agent, progress })
     })
 
+    // Même filet de sécurité que la génération simple : si le frontend
+    // extrait ne compile pas (le format à balises réduit le risque mais ne
+    // l'élimine pas si l'IA dévie du format demandé), on tente une
+    // auto-correction avant de sauvegarder quoi que ce soit.
+    const frontendCheck = checkSyntax(result.frontend)
+    if (!frontendCheck.valid) {
+      logger.info(`Frontend Full Stack invalide, tentative d'auto-correction: ${frontendCheck.error}`)
+      sendEvent(res, 'progress', { agent: 'Correction automatique', progress: 99 })
+      try {
+        const { files: fixedFiles } = await editProject(
+          { '/src/App.tsx': result.frontend },
+          `Le fichier contient une erreur qui empêche son utilisation : "${frontendCheck.error}". Corrige UNIQUEMENT cette erreur, sans rien changer d'autre au comportement du code.`
+        )
+        if (fixedFiles['/src/App.tsx'] && checkSyntax(fixedFiles['/src/App.tsx']).valid) {
+          result.frontend = fixedFiles['/src/App.tsx']
+        }
+      } catch (repairError) {
+        logger.error('Échec auto-correction frontend Full Stack:', repairError)
+      }
+    }
+
     await supabaseAdmin.from('generated_codes').insert([
       {
         project_id: project.id,
