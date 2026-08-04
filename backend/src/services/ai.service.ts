@@ -70,7 +70,7 @@ Réponds UNIQUEMENT avec les fichiers séparés par ce marqueur exact, sans JSON
 ###FILE:/src/components/Board.tsx###
 (contenu complet et brut du fichier ici)
 ###ENDFILE###
-Minimum 2 fichiers, maximum 6 fichiers. Le fichier racine doit obligatoirement s'appeler "/src/App.tsx" et exporter un composant par défaut. Rien avant le premier ###FILE:, rien après le dernier ###ENDFILE###.`,
+Minimum 2 fichiers, maximum 6 fichiers. Le fichier racine doit obligatoirement s'appeler "/src/App.tsx" et exporter un composant par défaut. Rien avant le premier ###FILE:, rien après le dernier ###ENDFILE###. N'entoure JAMAIS le contenu d'un fichier de balises Markdown \`\`\` — ni au début, ni à la fin d'un bloc. Le texte entre ###FILE:chemin### et ###ENDFILE### doit être EXCLUSIVEMENT le code source, rien d'autre.`,
   },
   {
     id: 'tester',
@@ -387,13 +387,47 @@ export function extractCodeBlock(text: string, language: string): string | null 
 // le JSON.parse invalide et faisait échouer toute la génération avec une
 // erreur de syntaxe, sans qu'aucun repli ne puisse la récupérer. Le format à
 // balises transporte le code tel quel, sans ré-encodage, donc rien à casser.
+// Parseur du format à balises ###FILE:chemin### ... ###ENDFILE### — remplace
+// le JSON brut comme format d'échange multi-fichiers. Le JSON exigeait que le
+// modèle échappe correctement chaque guillemet/retour à ligne/backslash à
+// l'intérieur du code généré ; le moindre oubli (fréquent sur du code
+// contenant lui-même des guillemets et des template literals) rendait tout
+// le JSON.parse invalide et faisait échouer toute la génération avec une
+// erreur de syntaxe, sans qu'aucun repli ne puisse la récupérer. Le format à
+// balises transporte le code tel quel, sans ré-encodage, donc rien à casser.
+//
+// Découpage positionnel plutôt que regex non-greedy avec ###ENDFILE### : un
+// test réel (4 août) a montré que le modèle omet parfois ###ENDFILE### sur
+// un fichier (ou ajoute des balises ``` autour du bloc malgré la consigne),
+// ce qui faisait échouer la regex précédente sur TOUT le texte et renvoyait
+// le texte brut entier comme contenu d'un seul fichier. Ici, chaque fichier
+// commence à un ###FILE:chemin### et s'arrête au ###FILE:...### suivant (ou
+// à la fin du texte) — ###ENDFILE### n'est plus nécessaire pour que le
+// découpage réussisse, seulement retiré s'il traîne en fin de contenu.
 export function extractFilesTagged(text: string): Record<string, string> | null {
-  const regex = /###FILE:(.+?)###\r?\n([\s\S]*?)###ENDFILE###/g
+  const markerRegex = /###FILE:(.+?)###\r?\n/g
+  const markers: { path: string; contentStart: number }[] = []
+  let m: RegExpExecArray | null
+  while ((m = markerRegex.exec(text)) !== null) {
+    markers.push({ path: m[1].trim(), contentStart: m.index + m[0].length })
+  }
+  if (markers.length === 0) return null
+
   const files: Record<string, string> = {}
-  let match: RegExpExecArray | null
-  while ((match = regex.exec(text)) !== null) {
-    const path = match[1].trim()
-    const content = match[2].replace(/\r?\n$/, '')
+  for (let i = 0; i < markers.length; i++) {
+    const { path, contentStart } = markers[i]
+    const contentEnd = i + 1 < markers.length ? text.lastIndexOf('###FILE:', markers[i + 1].contentStart) : text.length
+    let content = text.slice(contentStart, contentEnd)
+
+    // Retire un ###ENDFILE### de fin s'il est présent, et toute balise
+    // Markdown ``` (avec ou sans nom de langage) que le modèle aurait
+    // ajoutée en tête ou en fin de bloc malgré la consigne de code brut.
+    content = content.replace(/###ENDFILE###\s*$/, '')
+    content = content.trim()
+    content = content.replace(/^```[a-zA-Z]*\r?\n/, '')
+    content = content.replace(/\r?\n```$/, '')
+    content = content.trim()
+
     if (path.startsWith('/') && content.length > 0) {
       files[path] = content
     }
