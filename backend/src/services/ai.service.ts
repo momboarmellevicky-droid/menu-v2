@@ -278,55 +278,62 @@ async function callAgent(agent: AIAgent, input: string): Promise<GenerationResul
     }
   }
 
+  // Gemini essayé avant Groq : plus fiable pour respecter des consignes de
+  // format strict (comme "génère exactement N fichiers séparés par des
+  // balises") sur ce type de tâche multi-fichiers — confirmé nécessaire le
+  // 5 août après un test réel où Groq (Llama 3.3) n'a produit qu'un seul
+  // fichier au lieu des 2 à 6 attendus.
   try {
-    if (!openai) throw new Error('OpenAI non configuré')
+    if (!gemini) throw new Error('Gemini non configuré')
 
-    const fallback = await openai.chat.completions.create({
-      model: AI_CONFIG.fallbackModel,
-      max_tokens: AI_CONFIG.maxTokens,
-      temperature: AI_CONFIG.temperature,
-      messages: [
-        { role: 'system', content: agent.systemPrompt },
-        { role: 'user', content: input },
-      ],
+    const model = gemini.getGenerativeModel({
+      model: AI_CONFIG.geminiModel,
+      systemInstruction: agent.systemPrompt,
     })
+    const geminiResult = await model.generateContent(input)
+    const geminiOutput = geminiResult.response.text()
+
+    logger.info(`Agent ${agent.name} terminé via Gemini`)
 
     return {
       agent: agent.name,
-      output: fallback.choices[0].message.content || '',
+      output: geminiOutput,
       status: 'success',
       timestamp: new Date().toISOString(),
     }
-  } catch (groqError) {
-    logger.error(`Erreur fallback Groq pour ${agent.name}`, {
-      message: groqError instanceof Error ? groqError.message : String(groqError),
+  } catch (geminiError) {
+    logger.error(`Erreur Gemini pour ${agent.name}`, {
+      message: geminiError instanceof Error ? geminiError.message : String(geminiError),
     })
 
     try {
-      if (!gemini) throw new Error('Gemini non configuré')
+      if (!openai) throw new Error('Groq non configuré')
 
-      const model = gemini.getGenerativeModel({
-        model: AI_CONFIG.geminiModel,
-        systemInstruction: agent.systemPrompt,
+      const fallback = await openai.chat.completions.create({
+        model: AI_CONFIG.fallbackModel,
+        max_tokens: AI_CONFIG.maxTokens,
+        temperature: AI_CONFIG.temperature,
+        messages: [
+          { role: 'system', content: agent.systemPrompt },
+          { role: 'user', content: input },
+        ],
       })
-      const geminiResult = await model.generateContent(input)
-      const geminiOutput = geminiResult.response.text()
 
-      logger.info(`Agent ${agent.name} terminé via Gemini`)
+      logger.info(`Agent ${agent.name} terminé via Groq (dernier recours)`)
 
       return {
         agent: agent.name,
-        output: geminiOutput,
+        output: fallback.choices[0].message.content || '',
         status: 'success',
         timestamp: new Date().toISOString(),
       }
-    } catch (geminiError) {
-      logger.error(`Erreur fallback Gemini pour ${agent.name}`, {
-        message: geminiError instanceof Error ? geminiError.message : String(geminiError),
+    } catch (groqError) {
+      logger.error(`Erreur Groq pour ${agent.name}`, {
+        message: groqError instanceof Error ? groqError.message : String(groqError),
       })
       return {
         agent: agent.name,
-        output: geminiError instanceof Error ? geminiError.message : 'Erreur inconnue',
+        output: groqError instanceof Error ? groqError.message : 'Erreur inconnue',
         status: 'error',
         timestamp: new Date().toISOString(),
       }
