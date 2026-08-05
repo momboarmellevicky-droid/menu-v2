@@ -243,6 +243,39 @@ Optimise le code en appliquant les corrections suggérées.
     throw error
   }
 }
+// Détecte les imports relatifs (./xxx ou ../xxx) référencés dans les
+// fichiers générés mais absents de l'ensemble fourni — sert de base au
+// filet de sécurité de generateFullStack qui redemande ces fichiers
+// précis à l'IA au lieu de faire échouer tout l'aperçu.
+function findMissingRelativeImports(files: Record<string, string>): string[] {
+  const existing = new Set(Object.keys(files))
+  const missing = new Set<string>()
+  const importRegex = /from\s+['"](\.[^'"]+)['"]/g
+
+  for (const [filePath, content] of Object.entries(files)) {
+    const fileDir = filePath.substring(0, filePath.lastIndexOf('/')) || ''
+    let match: RegExpExecArray | null
+    importRegex.lastIndex = 0
+    while ((match = importRegex.exec(content)) !== null) {
+      const relPath = match[1]
+      const segments = (fileDir + '/' + relPath).split('/')
+      const resolved: string[] = []
+      for (const seg of segments) {
+        if (seg === '' || seg === '.') continue
+        if (seg === '..') resolved.pop()
+        else resolved.push(seg)
+      }
+      const base = '/' + resolved.join('/')
+      const candidates = [base, `${base}.tsx`, `${base}.ts`]
+      if (!candidates.some(c => existing.has(c))) {
+        missing.add(`${base}.tsx`)
+      }
+    }
+  }
+
+  return Array.from(missing)
+}
+
 async function callAgent(agent: AIAgent, input: string): Promise<GenerationResult> {
   const startTime = Date.now()
 
@@ -348,8 +381,45 @@ export async function generateFullStack(
 ) {
   // Le frontend passe par le pipeline habituel (React multi-fichiers).
   const results = await runMultiAgentPipeline(prompt, 'fullstack', memory, onProgress, 'react')
-  const frontendFiles = extractFilesJson(results[results.length - 1].output)
-  const frontendCode = frontendFiles?.['/src/App.tsx'] || results[results.length - 1].output
+  let frontendFiles = extractFilesJson(results[results.length - 1].output)
+  let frontendCode = frontendFiles?.['/src/App.tsx'] || results[results.length - 1].output
+  if (!frontendFiles) frontendFiles = { '/src/App.tsx': frontendCode }
+
+  // Filet de sécurité contre l'imprévisibilité des modèles gratuits (Groq/
+  // Gemini) : confirmé le 5 août par plusieurs tests réels, le modèle
+  // génère parfois un App.tsx qui importe des fichiers qu'il n'a jamais
+  // créés (aucun bug de code de notre côté — le multi-fichiers fonctionne
+  // bien quand l'IA respecte la consigne, elle ne la respecte simplement
+  // pas à chaque fois). Plutôt que de faire échouer tout l'aperçu, on
+  // détecte les imports manquants et on redemande UNIQUEMENT ces
+  // fichiers-là, jusqu'à 2 fois, avant d'abandonner.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const missing = findMissingRelativeImports(frontendFiles)
+    if (missing.length === 0) break
+
+    onProgress?.(`Complétion des fichiers manquants (${attempt + 1}/2)`, 96)
+    const completionResult = await callAgent(
+      {
+        id: 'completer',
+        name: 'Complétion',
+        role: 'developer',
+        systemPrompt: `Tu complètes un projet React/TypeScript auquel il manque des fichiers. Réponds UNIQUEMENT avec les fichiers manquants au format ###FILE:chemin### suivi du code brut puis ###ENDFILE###, sans balises Markdown, sans JSON, sans aucun texte hors de ce format. N'inclus PAS les fichiers déjà fournis, uniquement ceux listés comme manquants.`,
+      },
+      `PROJET ACTUEL (fichiers existants) :
+${Object.entries(frontendFiles).map(([p, c]) => `###FILE:${p}###\n${c}\n###ENDFILE###`).join('\n')}
+
+FICHIERS MANQUANTS À CRÉER (référencés par un import mais absents ci-dessus) :
+${missing.join('\n')}`
+    )
+
+    const completedFiles = extractFilesTagged(completionResult.output)
+    if (completedFiles) {
+      frontendFiles = { ...frontendFiles, ...completedFiles }
+      if (frontendFiles['/src/App.tsx']) frontendCode = frontendFiles['/src/App.tsx']
+    } else {
+      break // l'IA n'a rien renvoyé d'exploitable, inutile de réessayer encore
+    }
+  }
 
   // Auparavant, "Full Stack" ne générait en réalité AUCUN backend ni base de
   // données : la fonction essayait d'extraire du code déjà au format JSON
@@ -381,7 +451,7 @@ ${backendResult.output}
 
   return {
     frontend: frontendCode,
-    frontendFiles: frontendFiles || { '/src/App.tsx': frontendCode },
+    frontendFiles,
     backend: extractCodeBlock(backendResult.output, 'ts') || extractCodeBlock(backendResult.output, 'typescript') || backendResult.output,
     database: extractCodeBlock(databaseResult.output, 'sql') || databaseResult.output,
     agents: allResults,
