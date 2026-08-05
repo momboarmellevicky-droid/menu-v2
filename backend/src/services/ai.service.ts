@@ -246,81 +246,89 @@ Optimise le code en appliquant les corrections suggérées.
 async function callAgent(agent: AIAgent, input: string): Promise<GenerationResult> {
   const startTime = Date.now()
 
-  try {
-    const response = await anthropic.messages.create({
-      model: AI_CONFIG.defaultModel,
-      max_tokens: AI_CONFIG.maxTokens,
-      temperature: AI_CONFIG.temperature,
-      system: agent.systemPrompt,
-      messages: [{ role: 'user', content: input }],
-    })
-
-    const output = response.content[0].type === 'text' ? response.content[0].text : ''
-    const duration = Date.now() - startTime
-
-    logger.info(`Agent ${agent.name} terminé en ${duration}ms`)
-
-    return {
-      agent: agent.name,
-      output,
-      status: 'success',
-      timestamp: new Date().toISOString(),
-    }
-  } catch (error) {
-    logger.error(`Erreur agent ${agent.name}:`, error)
-
+  // ANTHROPIC_API_KEY absente de menu-v2-backend (confirmé le 5 août) : plutôt
+  // que de tenter Claude à chaque appel et remplir les logs d'erreurs
+  // d'authentification systématiques avant de basculer sur le repli, on saute
+  // directement vers Groq/Gemini — déjà configurées et gratuites — tant que
+  // cette clé n'est pas ajoutée. Dès qu'ANTHROPIC_API_KEY sera présente, ce
+  // test suffit à réactiver Claude en priorité sans autre changement.
+  if (process.env.ANTHROPIC_API_KEY) {
     try {
-      if (!openai) throw new Error('OpenAI non configuré')
-
-      const fallback = await openai.chat.completions.create({
-        model: AI_CONFIG.fallbackModel,
+      const response = await anthropic.messages.create({
+        model: AI_CONFIG.defaultModel,
         max_tokens: AI_CONFIG.maxTokens,
         temperature: AI_CONFIG.temperature,
-        messages: [
-          { role: 'system', content: agent.systemPrompt },
-          { role: 'user', content: input },
-        ],
+        system: agent.systemPrompt,
+        messages: [{ role: 'user', content: input }],
       })
+
+      const output = response.content[0].type === 'text' ? response.content[0].text : ''
+      const duration = Date.now() - startTime
+
+      logger.info(`Agent ${agent.name} terminé en ${duration}ms`)
 
       return {
         agent: agent.name,
-        output: fallback.choices[0].message.content || '',
+        output,
         status: 'success',
         timestamp: new Date().toISOString(),
       }
-    } catch (fallbackError) {
-      logger.error(`Erreur fallback Groq pour ${agent.name}`, {
-        message: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+    } catch (error) {
+      logger.error(`Erreur agent ${agent.name} (Claude):`, error)
+    }
+  }
+
+  try {
+    if (!openai) throw new Error('OpenAI non configuré')
+
+    const fallback = await openai.chat.completions.create({
+      model: AI_CONFIG.fallbackModel,
+      max_tokens: AI_CONFIG.maxTokens,
+      temperature: AI_CONFIG.temperature,
+      messages: [
+        { role: 'system', content: agent.systemPrompt },
+        { role: 'user', content: input },
+      ],
+    })
+
+    return {
+      agent: agent.name,
+      output: fallback.choices[0].message.content || '',
+      status: 'success',
+      timestamp: new Date().toISOString(),
+    }
+  } catch (groqError) {
+    logger.error(`Erreur fallback Groq pour ${agent.name}`, {
+      message: groqError instanceof Error ? groqError.message : String(groqError),
+    })
+
+    try {
+      if (!gemini) throw new Error('Gemini non configuré')
+
+      const model = gemini.getGenerativeModel({
+        model: AI_CONFIG.geminiModel,
+        systemInstruction: agent.systemPrompt,
       })
+      const geminiResult = await model.generateContent(input)
+      const geminiOutput = geminiResult.response.text()
 
-      try {
-        if (!gemini) throw new Error('Gemini non configuré')
+      logger.info(`Agent ${agent.name} terminé via Gemini`)
 
-        const model = gemini.getGenerativeModel({
-          model: AI_CONFIG.geminiModel,
-          systemInstruction: agent.systemPrompt,
-        })
-        const geminiResult = await model.generateContent(input)
-        const geminiOutput = geminiResult.response.text()
-
-        logger.info(`Agent ${agent.name} terminé via Gemini (fallback niveau 2)`)
-
-        return {
-          agent: agent.name,
-          output: geminiOutput,
-          status: 'success',
-          timestamp: new Date().toISOString(),
-        }
-      } catch (geminiError) {
-        logger.error(`Erreur fallback Gemini pour ${agent.name}`, {
-          message: geminiError instanceof Error ? geminiError.message : String(geminiError),
-          })
-        return {
-          agent: agent.name,
-          output: error instanceof Error ? error.message : 'Erreur inconnue',
-          status: 'error',
-          timestamp: new Date().toISOString(),
-        }
+      return {
+        agent: agent.name,
+        output: geminiOutput,
+        status: 'success',
+        timestamp: new Date().toISOString(),
+      }
+    } catch (geminiError) {
+      logger.error(`Erreur fallback Gemini pour ${agent.name}`, {
+        message: geminiError instanceof Error ? geminiError.message : String(geminiError),
+      })
+      return {
+        agent: agent.name,
+        output: geminiError instanceof Error ? geminiError.message : 'Erreur inconnue',
+        status: 'error',
+        timestamp: new Date().toISOString(),
       }
     }
   }
