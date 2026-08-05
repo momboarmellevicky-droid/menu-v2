@@ -381,6 +381,7 @@ ${backendResult.output}
 
   return {
     frontend: frontendCode,
+    frontendFiles: frontendFiles || { '/src/App.tsx': frontendCode },
     backend: extractCodeBlock(backendResult.output, 'ts') || extractCodeBlock(backendResult.output, 'typescript') || backendResult.output,
     database: extractCodeBlock(databaseResult.output, 'sql') || databaseResult.output,
     agents: allResults,

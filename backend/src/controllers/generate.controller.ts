@@ -434,6 +434,7 @@ export async function generateFullStackProject(req: Request, res: Response) {
         )
         if (fixedFiles['/src/App.tsx'] && checkSyntax(fixedFiles['/src/App.tsx']).valid) {
           result.frontend = fixedFiles['/src/App.tsx']
+          result.frontendFiles = { ...result.frontendFiles, '/src/App.tsx': fixedFiles['/src/App.tsx'] }
         }
       } catch (repairError) {
         logger.error('Échec auto-correction frontend Full Stack:', repairError)
@@ -446,6 +447,7 @@ export async function generateFullStackProject(req: Request, res: Response) {
         user_id: userId,
         prompt: `${prompt} - Frontend`,
         code: result.frontend,
+        files: result.frontendFiles,
         language: 'tsx',
         framework: 'react',
       },
@@ -481,6 +483,7 @@ export async function generateFullStackProject(req: Request, res: Response) {
       success: true,
       projectId: project.id,
       frontend: result.frontend,
+      files: result.frontendFiles,
       backend: result.backend,
       database: result.database,
       agents: result.agents.map(a => ({

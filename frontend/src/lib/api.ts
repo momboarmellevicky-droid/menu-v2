@@ -200,6 +200,7 @@ class ApiClient {
       success: boolean
       projectId: string
       frontend: string
+      files: Record<string, string>
       backend: string
       database: string
       agents: { name: string; status: string }[]
