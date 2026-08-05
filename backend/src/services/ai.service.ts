@@ -508,7 +508,7 @@ export function extractFilesTagged(text: string): Record<string, string> | null 
     // Retire un ###ENDFILE### de fin s'il est présent, et toute balise
     // Markdown ``` (avec ou sans nom de langage) que le modèle aurait
     // ajoutée en tête ou en fin de bloc malgré la consigne de code brut.
-    content = content.replace(/###ENDFILE###\s*$/, '')
+    content = content.replace(/###ENDFILE:?###\s*$/, '')
     content = content.trim()
     content = content.replace(/^```[a-zA-Z]*\r?\n/, '')
     content = content.replace(/\r?\n```$/, '')
