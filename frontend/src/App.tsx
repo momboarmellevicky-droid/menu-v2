@@ -9,6 +9,7 @@ import MarketplacePage from './pages/MarketplacePage'
 import TeamPage from './pages/TeamPage'
 import DeployPage from './pages/DeployPage'
 import AnalyticsPage from './pages/AnalyticsPage'
+import SettingsPage from './pages/SettingsPage'
 import PricingPage from './pages/PricingPage'
 import TermsPage from './pages/legal/TermsPage'
 import PrivacyPage from './pages/legal/PrivacyPage'
@@ -31,7 +32,8 @@ function App() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/generate" element={<GeneratePage />} />
           <Route path="/team" element={<TeamPage />} />
-          <Route path="/deploy" element={<DeployPage />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
         </Route>
 
