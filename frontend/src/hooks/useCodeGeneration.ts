@@ -12,7 +12,7 @@ interface UseCodeGenerationReturn {
   errorDetails: ExplainedError | null
   generate: (prompt: string, framework?: string, projectId?: string) => Promise<void>
   generateFullStack: (prompt: string) => Promise<void>
-  editCurrentProject: (instruction: string) => Promise<void>
+  editCurrentProject: (instruction: string) => Promise<boolean>
 }
 
 const AGENT_NAMES = ['Analyste', 'Architecte', 'Designer', 'Développeur', 'Testeur', 'Optimiseur']
@@ -173,13 +173,16 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
       }
 
       finishProgress([{ name: 'Éditeur', status: 'completed' }])
-      setCurrentCode(code)
-      addToHistory(code)
-    } catch (err) {
-      handleGenerationError(err)
-    } finally {
-      setIsGenerating(false)
-    }
+        setCurrentCode(code)
+        addToHistory(code)
+        return true
+      } catch (err) {
+        handleGenerationError(err)
+        return false
+      } finally {
+        setIsGenerating(false)
+      }
+    }, [currentCode, initAgents, handleRealProgress, finishProgress, setCurrentCode, addToHistory])
   }, [currentCode, initAgents, handleRealProgress, finishProgress, setCurrentCode, addToHistory])
 
   return { isGenerating, progress, agents, currentCode, error, errorDetails, generate, generateFullStack, editCurrentProject }
