@@ -62,3 +62,31 @@ export async function getCredits(req: Request, res: Response) {
     res.status(500).json({ error: 'Erreur récupération crédits' })
   }
 }
+// Suppression de compte réelle, exigée par Google Play et l'App Store depuis
+// 2023 (une option de suppression doit être accessible directement dans
+// l'app, pas seulement "contactez-nous"). Supprime la ligne profiles ET le
+// compte d'authentification Supabase lui-même (irréversible).
+export async function deleteAccount(req: Request, res: Response) {
+  try {
+    const userId = req.user!.id
+
+    const { error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .delete()
+      .eq('id', userId)
+
+    if (profileError) {
+      logger.error('Erreur suppression profil:', profileError)
+    }
+
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId)
+
+    if (authError) throw authError
+
+    logger.info(`Compte supprimé: ${userId}`)
+    res.json({ success: true })
+  } catch (error) {
+    logger.error('Erreur deleteAccount:', error)
+    res.status(500).json({ error: 'Erreur suppression du compte' })
+  }
+}
