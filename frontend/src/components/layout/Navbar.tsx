@@ -62,10 +62,13 @@ export default function Navbar() {
                 <span className="text-xs text-text-muted">
                   {user?.credits} crédits
                 </span>
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-bg-card border border-border rounded-lg">
+                <Link
+                  to="/settings"
+                  className="flex items-center gap-2 px-3 py-1.5 bg-bg-card border border-border rounded-lg hover:border-primary/50 transition-colors"
+                >
                   <User size={16} className="text-primary" />
                   <span className="text-sm">{user?.name}</span>
-                </div>
+                </Link>
                 <button
                   onClick={logout}
                   className="p-2 text-text-muted hover:text-red-400 transition-colors"
@@ -120,13 +123,23 @@ export default function Navbar() {
               ))}
               <div className="pt-2 border-t border-border">
                 {isAuthenticated ? (
-                  <button
-                    onClick={() => { logout(); setMobileOpen(false) }}
-                    className="flex items-center gap-2 w-full px-4 py-3 text-red-400 text-sm"
-                  >
-                    <LogOut size={16} />
-                    Déconnexion
-                  </button>
+                  <>
+                    <Link
+                      to="/settings"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex items-center gap-2 w-full px-4 py-3 text-text-muted hover:text-white text-sm"
+                    >
+                      <User size={16} />
+                      Paramètres
+                    </Link>
+                    <button
+                      onClick={() => { logout(); setMobileOpen(false) }}
+                      className="flex items-center gap-2 w-full px-4 py-3 text-red-400 text-sm"
+                    >
+                      <LogOut size={16} />
+                      Déconnexion
+                    </button>
+                  </>
                 ) : (
                   <Link
                     to="/login"
