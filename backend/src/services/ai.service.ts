@@ -221,7 +221,21 @@ Respecte strictement cette demande, sans y ajouter de fonctionnalités non deman
     const test = await callAgent(AGENTS[4], dev.output)
     results.push(test)
 
+    ionProgress?.('Optimiseur', 95)
+    const optimized = await callAgent(optimizerAgent, `
+CODE ORIGINAL:
+${dev.output}
+
+RAPPORT TESTS:
+${test.output}
+
+Optimise le code en appliquant les corrections suggérées.
+    `)
     if (optimized.status === 'error') {
+      results.push({ ...optimized, output: dev.output, status: 'success' })
+    } else {
+      results.push(optimized)
+    }
       results.push({ ...optimized, output: dev.output, status: 'success' })
     } else {
       results.push(optimized)
