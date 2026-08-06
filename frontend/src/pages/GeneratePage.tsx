@@ -92,14 +92,16 @@ export default function GeneratePage() {
     setDeployUrl(null)
     setDeployError(null)
 
-    if (currentCode?.projectId) {
-      await editCurrentProject(text)
-      setPrompt('')
-    } else if (architecture === 'fullstack') {
-      await generateFullStack(text)
-    } else {
-      await generate(text, exportFormat)
-    }
+  if (currentCode?.projectId) {
+        const success = await editCurrentProject(text)
+        if (success) setPrompt('')
+      } else if (architecture === 'fullstack') {
+        await generateFullStack(text)
+        setPrompt('')
+      } else {
+        await generate(text, exportFormat)
+        setPrompt('')
+  }
   }
 
   const handleNewProject = () => {
