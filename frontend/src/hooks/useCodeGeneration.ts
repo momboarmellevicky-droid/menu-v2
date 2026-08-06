@@ -183,7 +183,6 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
         setIsGenerating(false)
       }
     }, [currentCode, initAgents, handleRealProgress, finishProgress, setCurrentCode, addToHistory])
-  }, [currentCode, initAgents, handleRealProgress, finishProgress, setCurrentCode, addToHistory])
 
   return { isGenerating, progress, agents, currentCode, error, errorDetails, generate, generateFullStack, editCurrentProject }
-                                             }
+}
