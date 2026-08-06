@@ -458,13 +458,7 @@ ${backendResult.output}
     frontendFiles,
     backend: extractCodeBlock(backendResult.output, 'ts') || extractCodeBlock(backendResult.output, 'typescript') || backendResult.output,
     database: extractCodeBlock(databaseResult.output, 'sql') || databaseResult.output,
-    agents: allResults,
-  }
-}
-
-agents: allResults,
-  }
-}
+    
 
 export function extractCodeBlock(text: string, language: string): string | null {
   const fence = '```'
