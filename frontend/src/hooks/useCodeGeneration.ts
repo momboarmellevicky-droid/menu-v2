@@ -151,7 +151,7 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
   }, [initAgents, handleRealProgress, finishProgress, setCurrentCode, addToHistory])
 
   const editCurrentProject = useCallback(async (instruction: string) => {
-    if (!currentCode?.projectId) return
+    if (!currentCode?.projectId) return false
     setIsGenerating(true)
     setError(null)
     setErrorDetails(null)
