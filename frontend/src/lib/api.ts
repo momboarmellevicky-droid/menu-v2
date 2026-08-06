@@ -304,6 +304,12 @@ class ApiClient {
   async getCredits() {
     return this.request<{ credits: number }>('/auth/credits')
   }
+
+  async deleteAccount() {
+    return this.request<{ success: boolean }>('/auth/account', {
+      method: 'DELETE',
+    })
+  }
 }
 
 export const api = new ApiClient()
