@@ -33,10 +33,8 @@ function App() {
           <Route path="/generate" element={<GeneratePage />} />
           <Route path="/team" element={<TeamPage />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/analytics" element={<AnalyticsPage />} />
-        </Route>
-
+              <Route path="/settings" element={<SettingsPage />} />
+  
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
