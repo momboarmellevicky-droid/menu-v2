@@ -27,7 +27,7 @@ export default function HeroSection() {
         className="flex flex-col items-center gap-3 mb-10"cg
       >
         <Logo size={100} />
-        <div className="text-left">
+        <div className="text-center">
           <span className="font-mono text-5xl md:text-6xl font-bold bg-gradient-to-r from-secondary to-primary bg-clip-text text-transparent block">
             MÉNU
           </span>
