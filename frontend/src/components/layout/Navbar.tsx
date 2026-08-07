@@ -30,7 +30,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2">
+          <Link to="/" className="flex flex-col items-center gap-0.5">
             <Logo size={36} animated={false} />
             <div className="flex flex-col">
               <span className="font-mono font-bold text-lg leading-none">MÉNU</span>
