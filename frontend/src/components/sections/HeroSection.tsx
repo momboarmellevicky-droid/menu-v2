@@ -24,7 +24,7 @@ export default function HeroSection() {
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.6, delay: 0.1 }}
-        className="flex flex-col items-center gap-3 mb-10"cg
+        className="flex flex-col items-center gap-3 mb-10"
       >
         <Logo size={100} />
         <div className="text-center">
