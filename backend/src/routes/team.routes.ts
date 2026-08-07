@@ -8,13 +8,32 @@ const router = Router()
 
 router.get('/:projectId', authenticateUser, async (req, res) => {
   try {
-    const { data, error } = await supabaseAdmin
+    const { data: members, error } = await supabaseAdmin
       .from('team_members')
-      .select('*, profiles:user_id(full_name, email, avatar_url)')
+      .select('*')
       .eq('project_id', req.params.projectId)
 
     if (error) throw error
-    res.json(data || [])
+
+    const userIds = (members || []).map((m) => m.user_id)
+    let profilesById: Record<string, any> = {}
+
+    if (userIds.length > 0) {
+      const { data: profiles, error: profilesError } = await supabaseAdmin
+        .from('profiles')
+        .select('id, full_name, email, avatar_url')
+        .in('id', userIds)
+
+      if (profilesError) throw profilesError
+      profilesById = Object.fromEntries((profiles || []).map((p) => [p.id, p]))
+    }
+
+    const result = (members || []).map((m) => ({
+      ...m,
+      profiles: profilesById[m.user_id] || null,
+    }))
+
+    res.json(result)
   } catch (error) {
     logger.error('Erreur get team:', error)
     res.status(500).json({ error: 'Erreur récupération équipe' })
@@ -25,7 +44,6 @@ router.post('/invite', authenticateUser, async (req, res) => {
   try {
     const validated = inviteTeamSchema.parse(req.body)
 
-    // Vérifier que l'utilisateur est propriétaire du projet
     const { data: project } = await supabaseAdmin
       .from('projects')
       .select('user_id')
@@ -36,7 +54,6 @@ router.post('/invite', authenticateUser, async (req, res) => {
       return res.status(403).json({ error: 'Accès non autorisé' })
     }
 
-    // Trouver l'utilisateur par email
     const { data: invitedUser } = await supabaseAdmin
       .from('profiles')
       .select('id')
@@ -47,7 +64,6 @@ router.post('/invite', authenticateUser, async (req, res) => {
       return res.status(404).json({ error: 'Utilisateur non trouvé' })
     }
 
-    // Ajouter le membre
     const { data, error } = await supabaseAdmin
       .from('team_members')
       .insert({
@@ -61,7 +77,6 @@ router.post('/invite', authenticateUser, async (req, res) => {
 
     if (error) throw error
 
-    // Ajouter aux collaborateurs du projet
     await supabaseAdmin.rpc('add_collaborator', {
       project_uuid: validated.projectId,
       user_uuid: invitedUser.id,
