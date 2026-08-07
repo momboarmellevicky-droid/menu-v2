@@ -11,7 +11,7 @@ import MemoryBadge from '../components/ui/MemoryBadge'
 
 const quickActions = [
   { icon: Code2, label: 'Nouveau projet', href: '/generate', color: 'from-primary to-secondary' },
-  { icon: FolderOpen, label: 'Mes projets', href: '#', color: 'from-secondary to-primary' },
+  { icon: FolderOpen, label: 'Mes projets', href: '/projects', color: 'from-secondary to-primary' },
   { icon: Zap, label: 'Crédits', href: '#', color: 'from-primary to-secondary' },
   { icon: TrendingUp, label: 'Analytics', href: '/analytics', color: 'from-secondary to-primary' },
 ]
