@@ -107,14 +107,16 @@ export async function initiateMobileMoneyPayment(params: InitiatePaymentParams):
       }
     }
 
+    const tx = data.transaction || data
     const transactionId: string | undefined =
-      data.transaction?.id || data.transaction_id || data.id || data.reference || data.transactionId
+      tx?.id || data.transaction_id || data.id || data.reference || data.transactionId
     const status: PaymentResult['status'] =
-      data.status === 'success' || data.status === 'SUCCESS' ? 'success' : 'pending'
+      tx?.status === 'success' || tx?.status === 'SUCCESS' ? 'success' : 'pending'
 
-    logger.info(`Paiement ${operator.toUpperCase()} en statut "${status}" (transactionId: ${transactionId})`, {
-      userId,
-    })
+    logger.info(
+      `Paiement ${operator.toUpperCase()} en statut "${status}" (transactionId: ${transactionId}, raw: ${JSON.stringify(tx)})`,
+      { userId }
+    )
 
     return {
       success: true,
@@ -162,10 +164,14 @@ export async function checkPaymentStatus(transactionId: string, userId: string):
     })
 
     const data: any = await res.json().catch(() => null)
+    const tx = data?.transaction || data
     const status: PaymentResult['status'] =
-      data?.status === 'success' ? 'success' : data?.status === 'failed' ? 'failed' : 'pending'
+      tx?.status === 'success' ? 'success' : tx?.status === 'failed' ? 'failed' : 'pending'
 
-    logger.info(`Statut vérifié pour transaction ${transactionId} : ${status}`, { userId })
+    logger.info(
+      `Statut vérifié pour transaction ${transactionId} : ${status} (raw: ${JSON.stringify(tx)})`,
+      { userId }
+    )
 
     return {
       success: res.ok,
