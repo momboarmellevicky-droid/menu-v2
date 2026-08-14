@@ -50,6 +50,18 @@ function endpointFor(operator: MobileMoneyOperator): string {
 }
 
 /**
+ * SingPay/Airtel exige le format international complet (indicatif 241, sans
+ * le 0 initial) pour déclencher le push USSD réel. Le frontend ne collecte
+ * que 8-9 chiffres locaux (ex: "077123456") : on ajoute l'indicatif ici.
+ */
+function toInternationalMsisdn(phoneNumber: string): string {
+  let digits = phoneNumber.replace(/\D/g, '')
+  if (digits.startsWith('241')) return digits
+  if (digits.startsWith('0')) digits = digits.slice(1)
+  return `241${digits}`
+}
+
+/**
  * Initie un paiement Mobile Money (Airtel Money ou Moov Money) via SingPay.
  */
 export async function initiateMobileMoneyPayment(params: InitiatePaymentParams): Promise<PaymentResult> {
@@ -87,7 +99,7 @@ export async function initiateMobileMoneyPayment(params: InitiatePaymentParams):
       body: JSON.stringify({
         amount,
         reference,
-        client_msisdn: phoneNumber,
+        client_msisdn: toInternationalMsisdn(phoneNumber),
         portefeuille: SINGPAY_WALLET_ID,
         isTransfer: false,
       }),
