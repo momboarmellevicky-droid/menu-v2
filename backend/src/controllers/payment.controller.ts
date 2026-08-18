@@ -26,7 +26,7 @@ export async function startSubscriptionPayment(req: Request, res: Response) {
     }
 
     const { amountFcfa, credits } = PLANS[plan]
-    const reference = `subscription:${userId}:${plan}:${Date.now()}`
+  const reference = `M2${Date.now().toString(36).toUpperCase()}`
 
     // Enregistrement de la tentative AVANT l'appel SingPay, pour ne jamais
     // perdre la trace d'un paiement qui aurait réussi côté SingPay mais
