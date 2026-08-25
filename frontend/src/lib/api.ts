@@ -297,6 +297,19 @@ class ApiClient {
     }>(`/payment/status/${reference}`)
   }
 
+  async startStripeCheckout(plan: 'pro' | 'team') {
+    return this.request<{ success: boolean; url: string; sessionId: string }>('/payment/stripe/checkout', {
+      method: 'POST',
+      body: JSON.stringify({ plan }),
+    })
+  }
+
+  async verifyStripeCheckout(sessionId: string) {
+    return this.request<{ success: boolean; status: 'pending' | 'success'; message_fr: string }>(
+      `/payment/stripe/verify/${sessionId}`
+    )
+  }
+
   async getProfile() {
     return this.request('/auth/profile')
   }

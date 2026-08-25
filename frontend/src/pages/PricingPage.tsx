@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Check, Sparkles } from 'lucide-react'
+import { Check, Sparkles, Loader2, CheckCircle2 } from 'lucide-react'
 import PaymentModal from '../components/PaymentModal'
+import { api } from '../lib/api'
 
 const plans = [
   {
@@ -51,10 +52,45 @@ const plans = [
 
 export default function PricingPage() {
   const [paymentPlan, setPaymentPlan] = useState<'pro' | null>(null)
+  const [stripeReturn, setStripeReturn] = useState<'checking' | 'success' | 'pending' | null>(null)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const sessionId = params.get('stripe_session_id')
+    if (!sessionId) return
+
+    setStripeReturn('checking')
+    api
+      .verifyStripeCheckout(sessionId)
+      .then((result) => {
+        setStripeReturn(result.status === 'success' ? 'success' : 'pending')
+      })
+      .catch(() => setStripeReturn('pending'))
+      .finally(() => {
+        // Nettoie l'URL pour éviter une nouvelle vérification si la page est rechargée.
+        window.history.replaceState({}, '', window.location.pathname)
+      })
+  }, [])
 
   return (
     <div className="min-h-screen pt-24 px-4 pb-16 max-w-5xl mx-auto relative z-10">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+        {stripeReturn === 'checking' && (
+          <div className="flex items-center justify-center gap-2 text-sm text-text-muted mb-8">
+            <Loader2 size={16} className="animate-spin" /> Vérification du paiement...
+          </div>
+        )}
+        {stripeReturn === 'success' && (
+          <div className="flex items-center justify-center gap-2 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl py-3 mb-8">
+            <CheckCircle2 size={16} /> Paiement confirmé, votre plan a été activé.
+          </div>
+        )}
+        {stripeReturn === 'pending' && (
+          <div className="text-center text-sm text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-xl py-3 mb-8">
+            Paiement non confirmé. Si vous avez bien payé, contactez le support.
+          </div>
+        )}
+
         <div className="text-center mb-12">
           <h1 className="text-3xl font-bold mb-3">
             <span className="bg-gradient-to-r from-secondary to-primary bg-clip-text text-transparent">

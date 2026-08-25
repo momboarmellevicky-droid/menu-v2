@@ -14,6 +14,7 @@ interface PaymentModalProps {
 type Step = 'form' | 'pending' | 'success' | 'failed'
 
 export default function PaymentModal({ plan, planLabel, priceFcfa, onClose, onSuccess }: PaymentModalProps) {
+  const [method, setMethod] = useState<'mobile_money' | 'card'>('mobile_money')
   const [operator, setOperator] = useState<'airtel' | 'moov'>('airtel')
   const [phoneNumber, setPhoneNumber] = useState('')
   const [step, setStep] = useState<Step>('form')
@@ -22,6 +23,11 @@ export default function PaymentModal({ plan, planLabel, priceFcfa, onClose, onSu
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setErrorMessage('')
+
+    if (method === 'card') {
+      handleCardCheckout()
+      return
+    }
 
     if (!/^\d{8,9}$/.test(phoneNumber.replace(/\s/g, ''))) {
       setErrorMessage('Numéro de téléphone invalide (8 à 9 chiffres, sans indicatif).')
@@ -48,6 +54,20 @@ export default function PaymentModal({ plan, planLabel, priceFcfa, onClose, onSu
       pollStatus(result.reference)
     } catch (err) {
       setErrorMessage(err instanceof ApiError ? err.message : 'Erreur lors du paiement.')
+      setStep('failed')
+    }
+  }
+
+  async function handleCardCheckout() {
+    setStep('pending')
+    try {
+      // Redirection vers la page de paiement sécurisée Stripe (hébergée par
+      // Stripe : notre serveur ne voit jamais le numéro de carte). Le
+      // retour se fait sur cette même page, avec ?stripe_session_id=...
+      const result = await api.startStripeCheckout(plan)
+      window.location.href = result.url
+    } catch (err) {
+      setErrorMessage(err instanceof ApiError ? err.message : 'Erreur lors de la création du paiement par carte.')
       setStep('failed')
     }
   }
@@ -106,44 +126,78 @@ export default function PaymentModal({ plan, planLabel, priceFcfa, onClose, onSu
             <>
               <h2 className="text-lg font-semibold mb-1">Passer au plan {planLabel}</h2>
               <p className="text-sm text-text-muted mb-6">
-                {priceFcfa.toLocaleString('fr-FR')} FCFA / mois, via Mobile Money
+                {method === 'mobile_money'
+                  ? `${priceFcfa.toLocaleString('fr-FR')} FCFA / mois, via Mobile Money`
+                  : 'Paiement par carte bancaire, en dollars (tous pays)'}
               </p>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="text-sm text-text-muted mb-2 block">Opérateur</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setOperator('airtel')}
-                      className={`py-2.5 rounded-xl text-sm font-medium border ${
-                        operator === 'airtel' ? 'border-primary bg-primary/10 text-white' : 'border-border text-text-muted'
-                      }`}
-                    >
-                      Airtel Money
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOperator('moov')}
-                      className={`py-2.5 rounded-xl text-sm font-medium border ${
-                        operator === 'moov' ? 'border-primary bg-primary/10 text-white' : 'border-border text-text-muted'
-                      }`}
-                    >
-                      Moov Money
-                    </button>
-                  </div>
-                </div>
+              <div className="grid grid-cols-2 gap-2 mb-5">
+                <button
+                  type="button"
+                  onClick={() => setMethod('mobile_money')}
+                  className={`py-2.5 rounded-xl text-sm font-medium border ${
+                    method === 'mobile_money' ? 'border-primary bg-primary/10 text-white' : 'border-border text-text-muted'
+                  }`}
+                >
+                  Mobile Money
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMethod('card')}
+                  className={`py-2.5 rounded-xl text-sm font-medium border ${
+                    method === 'card' ? 'border-primary bg-primary/10 text-white' : 'border-border text-text-muted'
+                  }`}
+                >
+                  Carte bancaire
+                </button>
+              </div>
 
-                <div>
-                  <label className="text-sm text-text-muted mb-2 block">Numéro de téléphone</label>
-                  <input
-                    type="tel"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    placeholder="Ex: 077123456"
-                    className="w-full bg-black/20 border border-border rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-text-muted/50 focus:outline-none focus:border-primary"
-                  />
-                </div>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {method === 'mobile_money' && (
+                  <>
+                    <div>
+                      <label className="text-sm text-text-muted mb-2 block">Opérateur</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setOperator('airtel')}
+                          className={`py-2.5 rounded-xl text-sm font-medium border ${
+                            operator === 'airtel' ? 'border-primary bg-primary/10 text-white' : 'border-border text-text-muted'
+                          }`}
+                        >
+                          Airtel Money
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setOperator('moov')}
+                          className={`py-2.5 rounded-xl text-sm font-medium border ${
+                            operator === 'moov' ? 'border-primary bg-primary/10 text-white' : 'border-border text-text-muted'
+                          }`}
+                        >
+                          Moov Money
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-sm text-text-muted mb-2 block">Numéro de téléphone</label>
+                      <input
+                        type="tel"
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        placeholder="Ex: 077123456"
+                        className="w-full bg-black/20 border border-border rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-text-muted/50 focus:outline-none focus:border-primary"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {method === 'card' && (
+                  <p className="text-sm text-text-muted">
+                    Vous allez être redirigé vers une page de paiement sécurisée pour entrer les
+                    informations de votre carte. Aucune donnée bancaire ne transite par MÉNU.
+                  </p>
+                )}
 
                 {errorMessage && <p className="text-sm text-red-400">{errorMessage}</p>}
 
@@ -151,13 +205,15 @@ export default function PaymentModal({ plan, planLabel, priceFcfa, onClose, onSu
                   type="submit"
                   className="w-full py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-primary to-secondary text-white hover:opacity-90"
                 >
-                  Payer {priceFcfa.toLocaleString('fr-FR')} FCFA
+                  {method === 'mobile_money'
+                    ? `Payer ${priceFcfa.toLocaleString('fr-FR')} FCFA`
+                    : 'Continuer vers le paiement par carte'}
                 </button>
               </form>
             </>
           )}
 
-          {step === 'pending' && (
+          {step === 'pending' && method === 'mobile_money' && (
             <div className="flex flex-col items-center text-center py-6">
               <Loader2 size={40} className="animate-spin text-primary mb-4" />
               <h2 className="text-lg font-semibold mb-2">Confirmez sur votre téléphone</h2>
@@ -165,6 +221,14 @@ export default function PaymentModal({ plan, planLabel, priceFcfa, onClose, onSu
                 Une demande de paiement a été envoyée à votre numéro {operator === 'airtel' ? 'Airtel Money' : 'Moov Money'}.
                 Validez-la pour activer votre plan.
               </p>
+            </div>
+          )}
+
+          {step === 'pending' && method === 'card' && (
+            <div className="flex flex-col items-center text-center py-6">
+              <Loader2 size={40} className="animate-spin text-primary mb-4" />
+              <h2 className="text-lg font-semibold mb-2">Redirection vers le paiement...</h2>
+              <p className="text-sm text-text-muted">Un instant, on vous emmène vers la page sécurisée.</p>
             </div>
           )}
 

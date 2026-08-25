@@ -1,12 +1,13 @@
 import { Request, Response } from 'express'
 import { initiateMobileMoneyPayment, checkPaymentStatus, MobileMoneyOperator } from '../services/payment.service'
+import { createCheckoutSession, verifyCheckoutSession, isStripeConfigured } from '../services/stripe.service'
 import { supabaseAdmin } from '../config/supabase'
 import { logger } from '../utils/logger'
 import { AppError } from '../middleware/error.middleware'
 
-const PLANS: Record<string, { amountFcfa: number; credits: number }> = {
-  pro: { amountFcfa: 11590, credits: 300 },
-  team: { amountFcfa: 29890, credits: 1000 },
+const PLANS: Record<string, { amountFcfa: number; amountUsd: number; credits: number; label: string }> = {
+  pro: { amountFcfa: 11590, amountUsd: 20, credits: 300, label: 'Pro' },
+  team: { amountFcfa: 29890, amountUsd: 50, credits: 1000, label: 'Team' },
 }
 
 export async function startSubscriptionPayment(req: Request, res: Response) {
@@ -124,7 +125,63 @@ export async function getSubscriptionPaymentStatus(req: Request, res: Response) 
   }
 }
 
-async function activatePlan(userId: string, plan: 'pro' | 'team', credits: number) {
+export async function startStripeCheckout(req: Request, res: Response) {
+  try {
+    const { plan } = req.body
+    const userId = req.user!.id
+    const userEmail = req.user!.email || ''
+
+    if (plan !== 'pro' && plan !== 'team') {
+      throw new AppError("Plan invalide. Valeurs acceptées : 'pro' ou 'team'.", 400)
+    }
+    if (!isStripeConfigured()) {
+      throw new AppError('Paiement par carte momentanément indisponible.', 503)
+    }
+
+    const { amountUsd, label } = PLANS[plan]
+
+    const { url, sessionId } = await createCheckoutSession({
+      plan,
+      planLabel: label,
+      amountUsd,
+      userId,
+      userEmail,
+    })
+
+    res.json({ success: true, url, sessionId })
+  } catch (error: any) {
+    logger.error('Erreur startStripeCheckout:', error)
+    if (error instanceof AppError) throw error
+    res.status(500).json({ error: 'Erreur lors de la création du paiement par carte', details: error.message })
+  }
+}
+
+export async function verifyStripeCheckout(req: Request, res: Response) {
+  try {
+    const { sessionId } = req.params
+    const userId = req.user!.id
+
+    const result = await verifyCheckoutSession(sessionId)
+
+    if (result.paid && result.userId === userId && (result.plan === 'pro' || result.plan === 'team')) {
+      const { credits } = PLANS[result.plan]
+      await activatePlan(userId, result.plan, credits)
+      return res.json({ success: true, status: 'success', message_fr: 'Paiement confirmé, plan activé.' })
+    }
+
+    if (result.paid && result.userId !== userId) {
+      throw new AppError('Cette session de paiement ne correspond pas à votre compte.', 403)
+    }
+
+    res.json({ success: true, status: 'pending', message_fr: 'Paiement non confirmé pour le moment.' })
+  } catch (error: any) {
+    logger.error('Erreur verifyStripeCheckout:', error)
+    if (error instanceof AppError) throw error
+    res.status(500).json({ error: 'Erreur lors de la vérification du paiement par carte', details: error.message })
+  }
+}
+
+export async function activatePlan(userId: string, plan: 'pro' | 'team', credits: number) {
   const renewsAt = new Date()
   renewsAt.setMonth(renewsAt.getMonth() + 1)
 
