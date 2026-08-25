@@ -9,7 +9,7 @@ import { Project } from '../types'
 export default function AnalyticsPage() {
   const { history } = useCodeStore()
   const [projects, setProjects] = useState<Project[]>([])
-  const [credits, setCredits] = useState<{ credits: number } | null>(null)
+  const [credits, setCredits] = useState<{ credits: number; plan: 'free' | 'pro' | 'team' } | null>(null)
   const [teamCount, setTeamCount] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -50,8 +50,9 @@ export default function AnalyticsPage() {
     percentage: Math.round((count / maxCount) * 100),
   }))
 
-  const creditsUsed = credits ? Math.max(0, 30 - credits.credits) : 0
-  const creditsTotal = 30
+  const PLAN_CREDITS: Record<'free' | 'pro' | 'team', number> = { free: 30, pro: 300, team: 1000 }
+  const creditsTotal = PLAN_CREDITS[credits?.plan ?? 'free']
+  const creditsUsed = credits ? Math.max(0, creditsTotal - credits.credits) : 0
 
   return (
     <div className="min-h-screen pt-24 px-4 pb-10 max-w-6xl mx-auto relative z-10">

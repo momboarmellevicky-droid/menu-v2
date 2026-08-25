@@ -50,13 +50,13 @@ export async function getCredits(req: Request, res: Response) {
   try {
     const { data, error } = await supabaseAdmin
       .from('profiles')
-      .select('credits')
+      .select('credits, plan')
       .eq('id', req.user!.id)
       .single()
 
     if (error) throw error
 
-    res.json({ credits: data?.credits || 0 })
+    res.json({ credits: data?.credits || 0, plan: data?.plan || 'free' })
   } catch (error) {
     logger.error('Erreur getCredits:', error)
     res.status(500).json({ error: 'Erreur récupération crédits' })

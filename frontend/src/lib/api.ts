@@ -315,7 +315,7 @@ class ApiClient {
   }
 
   async getCredits() {
-    return this.request<{ credits: number }>('/auth/credits')
+    return this.request<{ credits: number; plan: 'free' | 'pro' | 'team' }>('/auth/credits')
   }
 
   async deleteAccount() {
