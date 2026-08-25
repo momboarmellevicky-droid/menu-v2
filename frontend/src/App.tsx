@@ -4,7 +4,6 @@ import ProtectedRoute from './components/auth/ProtectedRoute'
 import LandingPage from './pages/LandingPage'
 import DashboardPage from './pages/DashboardPage'
 import GeneratePage from './pages/GeneratePage'
-import ProjectsPage from './pages/ProjectsPage'
 import LoginPage from './pages/LoginPage'
 import MarketplacePage from './pages/MarketplacePage'
 import TeamPage from './pages/TeamPage'
@@ -28,7 +27,7 @@ function App() {
         <Route path="/legal/terms" element={<TermsPage />} />
         <Route path="/legal/privacy" element={<PrivacyPage />} />
         <Route path="/legal/security" element={<SecurityPage />} />
-<Route path="/projects" element={<ProjectsPage />} />
+<Route path="/projects" element={<DashboardPage />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/generate" element={<GeneratePage />} />
