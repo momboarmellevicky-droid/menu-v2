@@ -175,13 +175,33 @@ export async function checkPaymentStatus(transactionId: string, userId: string):
       },
     })
 
-    const data: any = await res.json().catch(() => null)
+    const rawText = await res.text()
+    let data: any = null
+    try {
+      data = rawText ? JSON.parse(rawText) : null
+    } catch {
+      data = null
+    }
+
+    // Auparavant, un échec de parsing JSON produisait silencieusement
+    // "raw: null" dans les logs sans jamais indiquer le code HTTP ni le
+    // corps brut renvoyé par SingPay — impossible de savoir si c'était un
+    // 404, un 401, un corps vide, ou autre chose. Confirmé le 25 août sur
+    // trois vérifications consécutives d'une même transaction restée en
+    // pending. Ce log expose enfin la vraie cause pour le prochain test.
+    if (data === null) {
+      logger.error(
+        `Réponse SingPay illisible pour la vérification de statut (HTTP ${res.status} ${res.statusText})`,
+        { userId, transactionId, rawTextSnippet: rawText.slice(0, 500) }
+      )
+    }
+
     const tx = data?.transaction || data
     const status: PaymentResult['status'] =
       tx?.status === 'success' ? 'success' : tx?.status === 'failed' ? 'failed' : 'pending'
 
     logger.info(
-      `Statut vérifié pour transaction ${transactionId} : ${status} (raw: ${JSON.stringify(tx)})`,
+      `Statut vérifié pour transaction ${transactionId} : ${status} (HTTP ${res.status}, raw: ${JSON.stringify(tx)})`,
       { userId }
     )
 
