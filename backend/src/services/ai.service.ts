@@ -270,9 +270,17 @@ function findMissingRelativeImports(files: Record<string, string>): string[] {
         else resolved.push(seg)
       }
       const base = '/' + resolved.join('/')
-      const candidates = [base, `${base}.tsx`, `${base}.ts`]
+      const fileName = resolved[resolved.length - 1] || ''
+      // Convention : les fichiers utilitaires/types/hooks sont presque
+      // toujours en .ts, les composants (nom commençant par une majuscule)
+      // en .tsx — deviner le bon ordre aide l'agent de complétion à
+      // produire le bon chemin dès le premier essai plutôt qu'après coup.
+      const looksLikeComponent = /^[A-Z]/.test(fileName)
+      const candidates = looksLikeComponent
+        ? [base, `${base}.tsx`, `${base}.ts`]
+        : [base, `${base}.ts`, `${base}.tsx`]
       if (!candidates.some(c => existing.has(c))) {
-        missing.add(`${base}.tsx`)
+        missing.add(looksLikeComponent ? `${base}.tsx` : `${base}.ts`)
       }
     }
   }
@@ -427,12 +435,13 @@ export async function generateFullStack(
   // bien quand l'IA respecte la consigne, elle ne la respecte simplement
   // pas à chaque fois). Plutôt que de faire échouer tout l'aperçu, on
   // détecte les imports manquants et on redemande UNIQUEMENT ces
-  // fichiers-là, jusqu'à 2 fois, avant d'abandonner.
-    for (let attempt = 0; attempt < 2; attempt++) {
+  // fichiers-là, jusqu'à 3 fois, avant d'abandonner (relevé de 2 à 3 le
+  // 25 août après un nouvel échec constaté en conditions réelles).
+    for (let attempt = 0; attempt < 3; attempt++) {
     const missing = findMissingRelativeImports(frontendFiles)
     if (missing.length === 0) break
 
-    onProgress?.(`Complétion des fichiers manquants (${attempt + 1}/2)`, 96)
+    onProgress?.(`Complétion des fichiers manquants (${attempt + 1}/3)`, 96)
     const completionResult = await callAgent(
       {
         id: 'completer',
