@@ -165,7 +165,11 @@ export async function checkPaymentStatus(transactionId: string, userId: string):
     }
   }
 
-  try {
+  const GATEWAY_ERROR_CODES = [502, 503, 504]
+  let lastRes: Response | null = null
+  let rawText = ''
+
+  for (let attempt = 0; attempt < 3; attempt++) {
     const res = await fetch(`${SINGPAY_STATUS_URL}/${transactionId}`, {
       method: 'GET',
       headers: {
@@ -174,8 +178,21 @@ export async function checkPaymentStatus(transactionId: string, userId: string):
         'x-wallet': SINGPAY_WALLET_ID as string,
       },
     })
+    lastRes = res
+    rawText = await res.text()
 
-    const rawText = await res.text()
+    // Confirmé le 25 août : SingPay renvoie parfois un 504 Gateway Time-out
+    // sur son propre nginx pendant la vérification de statut (panne
+    // ponctuelle chez eux, pas un bug côté MÉNU — même paiement, même code,
+    // même wallet que les initiations qui, elles, réussissent). Une courte
+    // nouvelle tentative absorbe la plupart de ces coupures sans faire
+    // attendre l'utilisateur jusqu'au prochain sondage (6s).
+    if (!GATEWAY_ERROR_CODES.includes(res.status)) break
+    if (attempt < 2) await new Promise((r) => setTimeout(r, 1500))
+  }
+
+  try {
+    const res = lastRes!
     let data: any = null
     try {
       data = rawText ? JSON.parse(rawText) : null
