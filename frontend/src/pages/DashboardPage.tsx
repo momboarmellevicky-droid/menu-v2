@@ -126,7 +126,7 @@ export default function DashboardPage() {
                     <div>
                       <p className="text-sm font-medium truncate max-w-md">{project.name}</p>
                       <p className="text-xs text-text-muted">
-                        {project.architecture?.toUpperCase()} • {new Date(project.createdAt).toLocaleDateString('fr-FR')}
+                        {project.architecture?.toUpperCase()} • {new Date((project as any).created_at ?? project.createdAt).toLocaleDateString('fr-FR')}
                       </p>
                     </div>
                   </div>
