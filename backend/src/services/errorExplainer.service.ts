@@ -8,44 +8,34 @@ export interface ExplainedError {
 export function explainError(rawMessage: string): ExplainedError {
   const msg = rawMessage || ''
 
-  if (/rate limit|429/i.test(msg) && /groq|llama/i.test(msg)) {
+  if (/rate limit|429/i.test(msg)) {
     return {
-      title: 'Quota Groq journalier atteint',
+      title: 'Limite de requêtes Claude atteinte',
       explanation:
-        "Le fournisseur IA de secours (Groq) a atteint sa limite gratuite de tokens pour aujourd'hui. C'est un plafond imposé par Groq, pas un bug de MÉNU.",
-      suggestion:
-        'Réessayez dans quelques heures (le quota se réinitialise chaque jour), ou passez au plan payant Groq Dev Tier pour lever la limite.',
+        "L'API Claude a temporairement refusé la requête car la limite de requêtes par minute a été atteinte.",
+      suggestion: 'Patientez une minute puis réessayez.',
       category: 'quota',
     }
   }
 
-  if (/could not resolve authentication|api[_ ]?key/i.test(msg)) {
+  if (/could not resolve authentication|api[_ ]?key|401|unauthorized/i.test(msg)) {
     return {
-      title: 'Clé API manquante ou invalide',
+      title: 'Clé API Claude manquante ou invalide',
       explanation:
-        "Un des fournisseurs d'intelligence artificielle (Claude, Groq ou Gemini) n'a pas reçu de clé d'API valide pour traiter cette demande.",
+        "ANTHROPIC_API_KEY est absente, incorrecte, ou le crédit du compte Anthropic est épuisé.",
       suggestion:
-        "Vérifiez que les variables d'environnement ANTHROPIC_API_KEY, GROQ_API_KEY et GEMINI_API_KEY sont bien renseignées sur Render, puis relancez.",
+        'Vérifiez la variable ANTHROPIC_API_KEY dans Environment sur Render, et le solde de crédit sur console.anthropic.com.',
       category: 'config',
     }
   }
 
-  if (/gemini non configuré/i.test(msg)) {
+  if (/model.*not[_ ]?found|404/i.test(msg)) {
     return {
-      title: 'Gemini non configuré',
-      explanation: "La clé GEMINI_API_KEY est absente, donc le second filet de secours n'a pas pu être utilisé.",
-      suggestion: 'Ajoutez GEMINI_API_KEY dans les variables d\'environnement du backend sur Render.',
-      category: 'config',
-    }
-  }
-
-  if (/models\/gemini.*not found|404 not found/i.test(msg)) {
-    return {
-      title: 'Modèle Gemini introuvable',
+      title: 'Modèle Claude introuvable',
       explanation:
-        "Le nom du modèle Gemini configuré n'existe plus ou n'est pas disponible pour cette clé d'API.",
+        "Le nom du modèle configuré dans AI_CONFIG.defaultModel n'existe pas ou plus pour cette clé d'API.",
       suggestion:
-        "Mettez à jour AI_CONFIG.geminiModel dans backend/src/config/openai.ts vers un modèle actuellement supporté (ex: gemini-2.5-flash).",
+        'Vérifiez AI_CONFIG.defaultModel dans backend/src/config/openai.ts contre la liste des modèles actifs sur docs.claude.com.',
       category: 'config',
     }
   }
@@ -74,7 +64,7 @@ export function explainError(rawMessage: string): ExplainedError {
     return {
       title: 'Erreur de syntaxe non corrigeable automatiquement',
       explanation:
-        "L'IA a généré du code contenant une erreur de syntaxe, et la tentative automatique de correction a également échoué. Cela arrive occasionnellement quand le fournisseur de secours (Groq ou Gemini) est utilisé au lieu de Claude.",
+        "Claude a généré du code contenant une erreur de syntaxe, et la tentative automatique de correction a également échoué.",
       suggestion:
         "Relancez la génération avec un prompt légèrement reformulé — une nouvelle tentative aboutit presque toujours à un résultat correct.",
       category: 'validation',
@@ -83,12 +73,11 @@ export function explainError(rawMessage: string): ExplainedError {
 
   if (/erreur développeur|erreur analyste/i.test(msg)) {
     return {
-      title: "Les agents IA n'ont pas pu produire de résultat",
-      explanation:
-        "Tous les fournisseurs d'intelligence artificielle disponibles (Claude, Groq, Gemini) ont échoué à traiter cette demande à cette étape précise du pipeline.",
+      title: "Claude n'a pas pu produire de résultat à cette étape",
+      explanation: msg,
       suggestion:
-        'Réessayez avec un prompt légèrement reformulé, ou patientez quelques minutes — cela peut être une saturation temporaire des fournisseurs.',
-      category: 'quota',
+        'Réessayez avec un prompt légèrement reformulé. Si le problème persiste, consultez les logs backend sur Render pour le détail technique exact renvoyé par Claude.',
+      category: 'unknown',
     }
   }
 
