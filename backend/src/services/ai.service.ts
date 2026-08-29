@@ -303,14 +303,26 @@ async function callAgent(agent: AIAgent, input: string): Promise<GenerationResul
       // Anthropic renvoie une erreur 400 "`temperature` is deprecated for
       // this model" pour claude-sonnet-5 — confirmé en production, c'est le
       // message d'erreur exact reçu.
+      //
+      // thinking: { type: 'disabled' } ajouté le même jour : claude-sonnet-5
+      // active par défaut un raisonnement étendu ("effort" élevé) sur
+      // l'API — ce qui insère un bloc "thinking" avant le bloc "text" dans
+      // response.content, ralentit chaque appel et augmente le coût sans
+      // bénéfice pour de la génération de code. Désactivé explicitement.
       const response = await anthropic.messages.create({
         model: AI_CONFIG.defaultModel,
         max_tokens: AI_CONFIG.maxTokens,
+        thinking: { type: 'disabled' },
         system: agent.systemPrompt,
         messages: [{ role: 'user', content: input }],
       })
 
-      const output = response.content[0].type === 'text' ? response.content[0].text : ''
+      // Ne plus supposer que le texte est en content[0] : avec le
+      // raisonnement étendu (même désactivé, par sécurité si jamais
+      // réactivé plus tard), le bloc texte n'est pas garanti en première
+      // position. On cherche le premier bloc de type 'text' explicitement.
+      const textBlock = response.content.find((block) => block.type === 'text')
+      const output = textBlock && textBlock.type === 'text' ? textBlock.text : ''
       const duration = Date.now() - startTime
 
       logger.info(`Agent ${agent.name} terminé en ${duration}ms`)
@@ -529,13 +541,15 @@ export async function generateVoiceCommand(transcript: string): Promise<string> 
   const response = await anthropic.messages.create({
     model: AI_CONFIG.defaultModel,
     max_tokens: 500,
+    thinking: { type: 'disabled' },
     system: `Tu convertis une commande vocale en prompt technique structuré. 
 Extrais l'intention, les fonctionnalités demandées et la technologie suggérée.
 Réponds en JSON: { intent, features[], techStack, complexity }`,
     messages: [{ role: 'user', content: transcript }],
   })
 
-  return response.content[0].type === 'text' ? response.content[0].text : transcript
+  const textBlock = response.content.find((block) => block.type === 'text')
+  return textBlock && textBlock.type === 'text' ? textBlock.text : transcript
 }
 
 export async function editProject(
