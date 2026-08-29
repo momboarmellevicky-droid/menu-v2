@@ -587,9 +587,41 @@ Renvoie le projet complet mis à jour, au même format JSON.`
     throw new Error(`Erreur Éditeur: ${result.output}`)
   }
 
-  const files = extractFilesJson(result.output)
+  let files = extractFilesJson(result.output)
   if (!files) {
     throw new Error("L'éditeur n'a pas renvoyé un projet JSON exploitable")
+  }
+
+  // Même filet de sécurité que generateFullStack (29 août 2026) : l'éditeur
+  // peut modifier un fichier qui importe un composant sans le générer
+  // lui-même (ex: App.tsx modifié référence toujours PinballCanvas3D.tsx,
+  // mais ce fichier n'était pas dans la réponse). Avant, ce flux d'édition
+  // n'avait aucune vérification — contrairement à la génération initiale —
+  // ce qui laissait passer des projets cassés avec imports manquants.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const missing = findMissingRelativeImports(files)
+    if (missing.length === 0) break
+
+    const completionResult = await callAgent(
+      {
+        id: 'completer',
+        name: 'Complétion',
+        role: 'developer',
+        systemPrompt: `Tu complètes un projet React/TypeScript auquel il manque des fichiers. Réponds UNIQUEMENT avec les fichiers manquants au format ###FILE:chemin### suivi du code brut puis ###ENDFILE###, sans balises Markdown, sans JSON, sans aucun texte hors de ce format. N'inclus PAS les fichiers déjà fournis, uniquement ceux listés comme manquants.`,
+      },
+      `PROJET ACTUEL (fichiers existants) :
+${Object.entries(files).map(([p, c]) => `###FILE:${p}###\n${c}\n###ENDFILE###`).join('\n')}
+
+FICHIERS MANQUANTS À CRÉER (référencés par un import mais absents ci-dessus) :
+${missing.join('\n')}`
+    )
+
+    const completedFiles = extractFilesTagged(completionResult.output)
+    if (completedFiles) {
+      files = { ...files, ...completedFiles }
+    } else {
+      break // l'IA n'a rien renvoyé d'exploitable, inutile de réessayer encore
+    }
   }
 
   return { files, raw: result }
