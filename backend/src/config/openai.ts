@@ -26,7 +26,12 @@ export const mistral = process.env.MISTRAL_API_KEY
 
 // Configuration des modèles
 export const AI_CONFIG = {
-  defaultModel: 'claude-3-sonnet-20240229',
+  // claude-3-sonnet-20240229 (modèle de février 2024) a été retiré le 21
+  // juillet 2025 — chaque appel échouait silencieusement et retombait sur
+  // Gemini/Groq, même une fois la clé Anthropic payante ajoutée. Corrigé le
+  // 29 août 2026 vers le modèle actuel, meilleur rapport qualité/coût pour
+  // la génération de code multi-fichiers avec un budget limité (~20$).
+  defaultModel: 'claude-sonnet-5',
   fallbackModel: 'llama-3.3-70b-versatile',
   geminiModel: 'gemini-3.5-flash',
   mistralModel: 'mistral-large-latest',
