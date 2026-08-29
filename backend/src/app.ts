@@ -12,6 +12,7 @@ import teamRoutes from './routes/team.routes'
 import paymentRoutes from './routes/payment.routes'
 
 const app = express()
+app.set('trust proxy', 1)
 
 // Sécurité
 app.use(helmet({
