@@ -1,4 +1,4 @@
-import { anthropic, openai, gemini, mistral, AI_CONFIG } from '../config/openai'
+import { anthropic, AI_CONFIG } from '../config/openai'
 import { cache } from '../config/redis'
 import { supabaseAdmin } from '../config/supabase'
 import { logger } from '../utils/logger'
@@ -319,101 +319,26 @@ async function callAgent(agent: AIAgent, input: string): Promise<GenerationResul
         timestamp: new Date().toISOString(),
       }
     } catch (error) {
-      logger.error(`Erreur agent ${agent.name} (Claude):`, error)
+      // Autres fournisseurs (Gemini, Mistral, Groq) désactivés à la demande
+      // d'Amy le 29 août 2026 : Claude est désormais le seul fournisseur
+      // utilisé, plus aucun repli automatique vers un autre modèle.
+      logger.error(`Erreur agent ${agent.name} (Claude) — aucun repli configuré`, {
+        message: error instanceof Error ? error.message : String(error),
+      })
+      return {
+        agent: agent.name,
+        output: error instanceof Error ? error.message : 'Erreur inconnue (Claude)',
+        status: 'error',
+        timestamp: new Date().toISOString(),
+      }
     }
   }
 
-  // Gemini essayé avant Groq : plus fiable pour respecter des consignes de
-  // format strict (comme "génère exactement N fichiers séparés par des
-  // balises") sur ce type de tâche multi-fichiers — confirmé nécessaire le
-  // 5 août après un test réel où Groq (Llama 3.3) n'a produit qu'un seul
-  // fichier au lieu des 2 à 6 attendus.
-  try {
-    if (!gemini) throw new Error('Gemini non configuré')
-
-    const model = gemini.getGenerativeModel({
-      model: AI_CONFIG.geminiModel,
-      systemInstruction: agent.systemPrompt,
-    })
-    const geminiResult = await model.generateContent(input)
-    const geminiOutput = geminiResult.response.text()
-
-    logger.info(`Agent ${agent.name} terminé via Gemini`)
-
-    return {
-      agent: agent.name,
-      output: geminiOutput,
-      status: 'success',
-      timestamp: new Date().toISOString(),
-    }
-  } catch (geminiError) {
-    logger.error(`Erreur Gemini pour ${agent.name}`, {
-      message: geminiError instanceof Error ? geminiError.message : String(geminiError),
-    })
-
-    // Mistral essayé avant Groq : ajouté le 6 août comme 3e repli, pour ne
-    // plus dépendre uniquement de Groq (limite basse de 12000 tokens/minute,
-    // atteinte à plusieurs reprises lors de tests intensifs) quand Claude et
-    // Gemini échouent tous les deux au même moment.
-    try {
-      if (!mistral) throw new Error('Mistral non configuré')
-
-      const mistralResult = await mistral.chat.completions.create({
-        model: AI_CONFIG.mistralModel,
-        max_tokens: AI_CONFIG.maxTokens,
-        temperature: AI_CONFIG.temperature,
-        messages: [
-          { role: 'system', content: agent.systemPrompt },
-          { role: 'user', content: input },
-        ],
-      })
-
-      logger.info(`Agent ${agent.name} terminé via Mistral`)
-
-      return {
-        agent: agent.name,
-        output: mistralResult.choices[0].message.content || '',
-        status: 'success',
-        timestamp: new Date().toISOString(),
-      }
-    } catch (mistralError) {
-      logger.error(`Erreur Mistral pour ${agent.name}`, {
-        message: mistralError instanceof Error ? mistralError.message : String(mistralError),
-      })
-
-      try {
-        if (!openai) throw new Error('Groq non configuré')
-
-        const fallback = await openai.chat.completions.create({
-          model: AI_CONFIG.fallbackModel,
-          max_tokens: AI_CONFIG.maxTokens,
-          temperature: AI_CONFIG.temperature,
-          messages: [
-            { role: 'system', content: agent.systemPrompt },
-            { role: 'user', content: input },
-          ],
-        })
-
-        logger.info(`Agent ${agent.name} terminé via Groq (dernier recours)`)
-
-        return {
-          agent: agent.name,
-          output: fallback.choices[0].message.content || '',
-          status: 'success',
-          timestamp: new Date().toISOString(),
-        }
-      } catch (groqError) {
-        logger.error(`Erreur Groq pour ${agent.name}`, {
-          message: groqError instanceof Error ? groqError.message : String(groqError),
-        })
-        return {
-          agent: agent.name,
-          output: groqError instanceof Error ? groqError.message : 'Erreur inconnue',
-          status: 'error',
-          timestamp: new Date().toISOString(),
-        }
-      }
-    }
+  return {
+    agent: agent.name,
+    output: 'ANTHROPIC_API_KEY absente — aucun autre fournisseur configuré.',
+    status: 'error',
+    timestamp: new Date().toISOString(),
   }
 }
 
