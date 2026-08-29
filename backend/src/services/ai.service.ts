@@ -213,6 +213,7 @@ FORMAT: ${framework}
 Génère le code COMPLET pour: ${prompt}
 
 Respecte strictement cette demande, sans y ajouter de fonctionnalités non demandées.
+${architecture !== 'fullstack' && framework === 'react' ? "CONTRAINTE ABSOLUE : génère TOUT le code dans un seul fichier /src/App.tsx. Aucun import local (pas de ./components/..., pas de ./hooks/..., pas de ./utils/...). Un seul export default App." : ""}
 `)
     results.push(dev)
     if (dev.status === 'error') throw new Error(`Erreur Développeur: ${dev.output}`)
