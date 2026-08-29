@@ -299,10 +299,13 @@ async function callAgent(agent: AIAgent, input: string): Promise<GenerationResul
   // test suffit à réactiver Claude en priorité sans autre changement.
   if (process.env.ANTHROPIC_API_KEY) {
     try {
+      // Le paramètre temperature a été retiré ici le 29 août 2026 : l'API
+      // Anthropic renvoie une erreur 400 "`temperature` is deprecated for
+      // this model" pour claude-sonnet-5 — confirmé en production, c'est le
+      // message d'erreur exact reçu.
       const response = await anthropic.messages.create({
         model: AI_CONFIG.defaultModel,
         max_tokens: AI_CONFIG.maxTokens,
-        temperature: AI_CONFIG.temperature,
         system: agent.systemPrompt,
         messages: [{ role: 'user', content: input }],
       })
