@@ -10,8 +10,8 @@ interface UseCodeGenerationReturn {
   currentCode: GeneratedCode | null
   error: string | null
   errorDetails: ExplainedError | null
-  generate: (prompt: string, framework?: string, projectId?: string) => Promise<void>
-  generateFullStack: (prompt: string) => Promise<void>
+  generate: (prompt: string, framework?: string, projectId?: string) => Promise<boolean>
+  generateFullStack: (prompt: string) => Promise<boolean>
   editCurrentProject: (instruction: string) => Promise<boolean>
 }
 
@@ -70,7 +70,7 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
     }
   }
 
-  const generate = useCallback(async (prompt: string, framework: string = 'react', projectId?: string) => {
+  const generate = useCallback(async (prompt: string, framework: string = 'react', projectId?: string): Promise<boolean> => {
     setIsGenerating(true)
     setError(null)
     setErrorDetails(null)
@@ -94,14 +94,16 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
       finishProgress(result.agents)
       setCurrentCode(code)
       addToHistory(code)
+      return true
     } catch (err) {
       handleGenerationError(err)
+      return false
     } finally {
       setIsGenerating(false)
     }
   }, [initAgents, handleRealProgress, finishProgress, setCurrentCode, addToHistory])
 
-  const generateFullStack = useCallback(async (prompt: string) => {
+  const generateFullStack = useCallback(async (prompt: string): Promise<boolean> => {
     setIsGenerating(true)
     setError(null)
     setErrorDetails(null)
@@ -144,8 +146,10 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
       addToHistory(frontend)
       addToHistory(backend)
       addToHistory(database)
+      return true
     } catch (err) {
       handleGenerationError(err)
+      return false
     } finally {
       setIsGenerating(false)
     }
