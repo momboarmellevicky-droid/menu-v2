@@ -1,7 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import Navbar from './Navbar'
 import Footer from './Footer'
-import OrbBackground from '../ui/OrbBackground'
+import GalaxyBackground from '../ui/GalaxyBackground'
 import { useAuth } from '../../hooks/useAuth'
 
 export default function Layout() {
@@ -10,7 +10,7 @@ export default function Layout() {
 
   return (
     <div className="relative min-h-screen">
-      <OrbBackground />
+      <GalaxyBackground />
       <Navbar />
       <main className="relative z-10">
         <Outlet />
