@@ -114,6 +114,7 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
         id: `${result.projectId}-frontend`,
         prompt: `${prompt} - Frontend`,
         code: result.frontend,
+        files: result.files,
         language: 'tsx',
         framework: 'react',
         createdAt: new Date(),
