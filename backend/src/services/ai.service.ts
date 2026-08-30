@@ -76,6 +76,12 @@ EXIGENCES DE DESIGN — NIVEAU PRODUIT PROFESSIONNEL (Bolt/Lovable/Linear), JAMA
 - Micro-détails qui font la différence : coins arrondis cohérents, icônes (lucide-react autorisé), états vides bien traités (pas juste du texte brut), feedback visuel à chaque action utilisateur
 - Le résultat final doit ressembler à un produit SaaS qu'on pourrait vendre, jamais à un exercice de tutoriel ou un prototype d'étudiant
 
+RÈGLE ABSOLUE SUR LES EXPORTS/IMPORTS (cause fréquente de crash "Element type is invalid") :
+- CHAQUE composant React exporté d'un fichier doit utiliser EXCLUSIVEMENT export default — jamais d'export nommé pour un composant (jamais export const NomComposant = ... combiné à un import nommé ailleurs)
+- CHAQUE import d'un composant local doit être un import par défaut : import NomComposant from './NomComposant', jamais un import entre accolades pour un composant local
+- Les types, interfaces, constantes et fonctions utilitaires (non-composants) peuvent utiliser des exports nommés normalement, mais jamais pour un composant React
+- Avant de finaliser, vérifie mentalement que chaque import de composant correspond exactement au type d'export utilisé dans le fichier source
+
 FORMAT DE RÉPONSE OBLIGATOIRE :
 Réponds UNIQUEMENT avec les fichiers séparés par ce marqueur exact, sans JSON, sans échappement, code brut tel qu'il doit apparaître dans le fichier :
 ###FILE:/src/App.tsx###
@@ -114,7 +120,8 @@ FORMAT DE RÉPONSE OBLIGATOIRE :
 - Réponds UNIQUEMENT avec les MÊMES fichiers (mêmes chemins), au même format ###FILE:chemin### / ###ENDFILE###, code brut sans échappement, avec le contenu optimisé
 - Aucun texte avant le premier ###FILE:, aucun texte après le dernier ###ENDFILE###, aucune explication, aucune métrique, aucune phrase de conversation
 - Si tu n'as aucune optimisation à apporter, renvoie les fichiers originaux tels quels
-- Ne retire et n'ajoute aucun fichier, garde exactement les mêmes chemins`,
+- Ne retire et n'ajoute aucun fichier, garde exactement les mêmes chemins
+- IMPORTANT : vérifie que chaque export de composant reste en export default et que chaque import correspondant reste un import par défaut (jamais de changement vers un export/import nommé pour un composant) — une incohérence ici fait planter l'application entière`,
   },
 ]
 
