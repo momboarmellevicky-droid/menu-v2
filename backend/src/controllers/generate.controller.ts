@@ -19,13 +19,33 @@ function startSSE(res: Response) {
   res.setHeader('Connection', 'keep-alive')
   res.setHeader('X-Accel-Buffering', 'no')
   res.flushHeaders()
+
+  // Heartbeat (30 août 2026) : certains appels IA individuels (Testeur,
+  // Optimiseur en Full Stack) prennent 60 à 100+ secondes. Sans octet
+  // envoyé pendant ce temps, les connexions mobiles et certains proxys
+  // coupent la connexion pour inactivité (souvent au bout de 30-60s),
+  // ce qui provoquait un "network error" côté client alors que la
+  // génération continuait normalement côté serveur. On envoie un
+  // commentaire SSE (ignoré par le parseur d'événements du frontend,
+  // qui ne traite que les blocs "event:"/"data:") toutes les 15
+  // secondes pour garder la connexion active.
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(': heartbeat\n\n')
+    } catch {
+      clearInterval(heartbeat)
+    }
+  }, 15000)
+  res.once('close', () => clearInterval(heartbeat))
+  return heartbeat
 }
 
 function sendEvent(res: Response, event: string, data: unknown) {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
 }
 
-function endSSE(res: Response) {
+function endSSE(res: Response, heartbeat?: ReturnType<typeof setInterval>) {
+  if (heartbeat) clearInterval(heartbeat)
   res.end()
 }
 
