@@ -95,7 +95,7 @@ export default function LivePreview({ code, files, framework = 'react' }: LivePr
           title="Aperçu HTML"
           srcDoc={htmlContent}
           sandbox="allow-scripts allow-forms allow-popups allow-modals"
-          style={{ width: '100%', height: '480px', border: 'none', background: 'white' }}
+          style={{ width: '100%', height: '85vh', minHeight: '600px', border: 'none', background: 'white' }}
         />
       </div>
     )
@@ -168,7 +168,7 @@ function LivePreviewReact({ code, files }: { code: string; files?: Record<string
         <SandpackPreview
           showOpenInCodeSandbox={false}
           showRefreshButton={true}
-          style={{ height: '480px' }}
+          style={{ height: '85vh', minHeight: '600px' }}
         />
         {showConsole && <SandpackConsole style={{ height: '200px' }} />}
       </SandpackProvider>
