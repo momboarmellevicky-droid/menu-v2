@@ -44,6 +44,57 @@ export default function GeneratePage() {
   const [searchParams] = useSearchParams()
   const [loadingProject, setLoadingProject] = useState(false)
 
+  // Reprise après échec/fermeture pendant une génération (30 août 2026) :
+  // avant, quitter l'app ou subir un network error pendant la génération
+  // effaçait le prompt tapé et ne laissait aucun moyen de reprendre sans
+  // tout retaper — inacceptable pour un produit professionnel. On
+  // sauvegarde la demande en cours dans localStorage dès l'envoi, et on
+  // ne l'efface qu'en cas de succès confirmé.
+  const PENDING_KEY = 'menu-pending-generation'
+  const [resumeBanner, setResumeBanner] = useState<{ prompt: string; architecture: string } | null>(null)
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PENDING_KEY)
+      if (raw) {
+        const pending = JSON.parse(raw)
+        if (pending?.prompt) {
+          setResumeBanner(pending)
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  const savePending = (text: string, arch: string) => {
+    try {
+      localStorage.setItem(PENDING_KEY, JSON.stringify({ prompt: text, architecture: arch }))
+    } catch {
+      // ignore (stockage indisponible)
+    }
+  }
+
+  const clearPending = () => {
+    try {
+      localStorage.removeItem(PENDING_KEY)
+    } catch {
+      // ignore
+    }
+  }
+
+  const handleResumeGeneration = () => {
+    if (!resumeBanner) return
+    setPrompt(resumeBanner.prompt)
+    setArchitecture(resumeBanner.architecture)
+    setResumeBanner(null)
+  }
+
+  const handleDismissResume = () => {
+    setResumeBanner(null)
+    clearPending()
+  }
+
   useEffect(() => {
     const projectId = searchParams.get('project')
     if (!projectId) return
@@ -91,16 +142,17 @@ export default function GeneratePage() {
 
     setDeployUrl(null)
     setDeployError(null)
+    savePending(text, architecture)
 
   if (currentCode?.projectId) {
         const success = await editCurrentProject(text)
-        if (success) setPrompt('')
+        if (success) { setPrompt(''); clearPending() }
       } else if (architecture === 'fullstack') {
-        await generateFullStack(text)
-        setPrompt('')
+        const success = await generateFullStack(text)
+        if (success) { setPrompt(''); clearPending() }
       } else {
-        await generate(text, exportFormat)
-        setPrompt('')
+        const success = await generate(text, exportFormat)
+        if (success) { setPrompt(''); clearPending() }
   }
   }
 
@@ -177,6 +229,29 @@ export default function GeneratePage() {
               <Plus size={14} />
               Nouveau projet
             </button>
+          </div>
+        )}
+
+        {resumeBanner && (
+          <div className="flex items-center justify-between gap-3 bg-primary/10 border border-primary/30 rounded-xl p-4 mb-4">
+            <div className="text-sm text-white/90">
+              <span className="font-semibold text-primary">Génération précédente non terminée.</span>
+              {' '}Continuer avec : « {resumeBanner.prompt.slice(0, 60)}{resumeBanner.prompt.length > 60 ? '…' : ''} »
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={handleResumeGeneration}
+                className="px-3 py-1.5 bg-primary text-white text-xs font-semibold rounded-lg hover:opacity-90"
+              >
+                Continuer
+              </button>
+              <button
+                onClick={handleDismissResume}
+                className="px-3 py-1.5 text-text-muted text-xs hover:text-white"
+              >
+                Ignorer
+              </button>
+            </div>
           </div>
         )}
 
@@ -265,6 +340,16 @@ export default function GeneratePage() {
               ) : (
                 <p className="text-sm text-red-400">{error}</p>
               )}
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  onClick={handleSubmit}
+                  className="px-4 py-1.5 bg-red-500/20 text-red-300 text-xs font-semibold rounded-lg hover:bg-red-500/30 border border-red-500/40 flex items-center gap-1.5"
+                >
+                  <Sparkles size={14} />
+                  Réessayer
+                </button>
+                <span className="text-xs text-text-muted">Ta demande a été conservée, pas besoin de la retaper.</span>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
