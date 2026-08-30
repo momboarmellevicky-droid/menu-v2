@@ -164,6 +164,16 @@ function LivePreviewReact({ code, files }: { code: string; files?: Record<string
             ...npmDeps,
           },
         }}
+        options={{
+          // Délai d'attente porté de 10s (défaut) à 40s : sur mobile, avec un
+          // projet multi-fichiers (Full Stack notamment), le bundler distant
+          // met parfois plus de 10s à répondre, causant un "TIMEOUT" alors
+          // que le code lui-même est correct (30 août 2026, confirmé sur un
+          // projet Full Stack à 16 fichiers).
+          bundlerTimeOut: 40000,
+          recompileMode: 'delayed',
+          recompileDelay: 500,
+        }}
       >
         <SandpackPreview
           showOpenInCodeSandbox={false}
