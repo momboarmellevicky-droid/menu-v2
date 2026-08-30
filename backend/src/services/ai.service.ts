@@ -84,7 +84,7 @@ Réponds UNIQUEMENT avec les fichiers séparés par ce marqueur exact, sans JSON
 ###FILE:/src/components/Board.tsx###
 (contenu complet et brut du fichier ici)
 ###ENDFILE###
-Minimum 2 fichiers, maximum 6 fichiers. Le fichier racine doit obligatoirement s'appeler "/src/App.tsx" et exporter un composant par défaut. Rien avant le premier ###FILE:, rien après le dernier ###ENDFILE###. N'entoure JAMAIS le contenu d'un fichier de balises Markdown \`\`\` — ni au début, ni à la fin d'un bloc. Le texte entre ###FILE:chemin### et ###ENDFILE### doit être EXCLUSIVEMENT le code source, rien d'autre.`,
+Minimum 2 fichiers, maximum 12 fichiers (pour les applications avec authentification, plusieurs pages, ou navigation, davantage de fichiers est normal et attendu). Le fichier racine doit obligatoirement s'appeler "/src/App.tsx" et exporter un composant par défaut. Rien avant le premier ###FILE:, rien après le dernier ###ENDFILE###. N'entoure JAMAIS le contenu d'un fichier de balises Markdown \`\`\` — ni au début, ni à la fin d'un bloc. Le texte entre ###FILE:chemin### et ###ENDFILE### doit être EXCLUSIVEMENT le code source, rien d'autre.`,
   },
   {
     id: 'tester',
@@ -406,19 +406,22 @@ export async function generateFullStack(
   // bien quand l'IA respecte la consigne, elle ne la respecte simplement
   // pas à chaque fois). Plutôt que de faire échouer tout l'aperçu, on
   // détecte les imports manquants et on redemande UNIQUEMENT ces
-  // fichiers-là, jusqu'à 3 fois, avant d'abandonner (relevé de 2 à 3 le
-  // 25 août après un nouvel échec constaté en conditions réelles).
-    for (let attempt = 0; attempt < 3; attempt++) {
+  // fichiers-là, jusqu'à 6 fois, avant d'abandonner (relevé de 3 à 6 le
+  // 30 août : une app avec authentification/pages génère des imports en
+  // cascade — LoginPage importe AuthContext qui peut lui-même référencer
+  // un autre fichier absent — donc plusieurs passes successives sont
+  // nécessaires pour tout résoudre, pas seulement une ou deux).
+    for (let attempt = 0; attempt < 6; attempt++) {
     const missing = findMissingRelativeImports(frontendFiles)
     if (missing.length === 0) break
 
-    onProgress?.(`Complétion des fichiers manquants (${attempt + 1}/3)`, 96)
+    onProgress?.(`Complétion des fichiers manquants (${attempt + 1}/6)`, 96)
     const completionResult = await callAgent(
       {
         id: 'completer',
         name: 'Complétion',
         role: 'developer',
-        systemPrompt: `Tu complètes un projet React/TypeScript auquel il manque des fichiers. Réponds UNIQUEMENT avec les fichiers manquants au format ###FILE:chemin### suivi du code brut puis ###ENDFILE###, sans balises Markdown, sans JSON, sans aucun texte hors de ce format. N'inclus PAS les fichiers déjà fournis, uniquement ceux listés comme manquants.`,
+        systemPrompt: `Tu complètes un projet React/TypeScript auquel il manque des fichiers. Réponds UNIQUEMENT avec les fichiers manquants au format ###FILE:chemin### suivi du code brut puis ###ENDFILE###, sans balises Markdown, sans JSON, sans aucun texte hors de ce format. N'inclus PAS les fichiers déjà fournis, uniquement ceux listés comme manquants. Si un fichier que tu crées importe lui-même un autre fichier local qui n'existe pas encore, crée aussi ce fichier dans la même réponse plutôt que de créer une nouvelle dépendance manquante.`,
       },
       `PROJET ACTUEL (fichiers existants) :
 ${Object.entries(frontendFiles).map(([p, c]) => `###FILE:${p}###\n${c}\n###ENDFILE###`).join('\n')}
