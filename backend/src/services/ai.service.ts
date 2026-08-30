@@ -399,6 +399,27 @@ export async function generateFullStack(
   let frontendCode = frontendFiles?.['/src/App.tsx'] || results[results.length - 1].output
   if (!frontendFiles) frontendFiles = { '/src/App.tsx': frontendCode }
 
+  // Filet de sécurité critique (30 août 2026) : si le texte destiné à
+  // App.tsx contient encore les marqueurs bruts ###FILE:/###ENDFILE###,
+  // c'est que la première extraction a échoué à séparer correctement les
+  // fichiers et a laissé passer du texte de format brut à la place de code
+  // réel — un échec silencieux qui affichait littéralement "###FILE:..."
+  // dans l'aperçu au lieu d'une application. On retente une extraction
+  // directe sur ce texte, et si ça échoue aussi, on arrête proprement
+  // plutôt que d'afficher du texte cassé à l'utilisateur.
+  if (frontendCode.includes('###FILE:')) {
+    const reparsed = extractFilesTagged(frontendCode)
+    if (reparsed && reparsed['/src/App.tsx']) {
+      frontendFiles = reparsed
+      frontendCode = reparsed['/src/App.tsx']
+    } else if (reparsed && Object.keys(reparsed).length > 0) {
+      frontendFiles = reparsed
+      frontendCode = reparsed[Object.keys(reparsed)[0]]
+    } else {
+      throw new Error('Le développeur a renvoyé un format de fichiers invalide et irréparable. Relance la génération.')
+    }
+  }
+
   // Filet de sécurité contre l'imprévisibilité des modèles gratuits (Groq/
   // Gemini) : confirmé le 5 août par plusieurs tests réels, le modèle
   // génère parfois un App.tsx qui importe des fichiers qu'il n'a jamais
