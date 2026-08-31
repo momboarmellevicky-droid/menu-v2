@@ -467,31 +467,31 @@ ${missing.join('\n')}`
     }
   }
 
-  // Auparavant, "Full Stack" ne générait en réalité AUCUN backend ni base de
-  // données : la fonction essayait d'extraire du code déjà au format JSON
-  // multi-fichiers avec une regex cherchant d'anciens blocs markdown ```ts
-  // et ```sql qui n'existaient plus, donc backend/database revenaient
-  // toujours vides. Voici les deux vrais agents dédiés à la place.
-  onProgress?.('Développeur Backend', 97)
-  const backendResult = await callAgent(BACKEND_DEVELOPER, `
+  // Backend et Base de données sont tous deux dérivés du frontend généré,
+  // pas l'un de l'autre : ils peuvent donc être demandés en parallèle au
+  // lieu d'attendre le backend avant de lancer la base de données — gain
+  // net d'un aller-retour IA complet sur le temps total de génération
+  // Full Stack (précédemment : backend puis database en séquentiel).
+  onProgress?.('Backend + Base de données', 97)
+  const [backendResult, databaseResult] = await Promise.all([
+    callAgent(BACKEND_DEVELOPER, `
 FRONTEND GÉNÉRÉ (pour connaître les données et actions nécessaires) :
 ${frontendCode}
 
 Demande originale : ${prompt}
 
 Écris le backend Express/TypeScript complet correspondant.
-  `)
-
-  onProgress?.('Architecte Base de Données', 99)
-  const databaseResult = await callAgent(DATABASE_DESIGNER, `
-FRONTEND :
+  `),
+    callAgent(DATABASE_DESIGNER, `
+FRONTEND (pour connaître les entités et données nécessaires) :
 ${frontendCode}
 
-BACKEND :
-${backendResult.output}
+Demande originale : ${prompt}
 
 Écris le schéma SQL PostgreSQL complet correspondant.
-  `)
+  `),
+  ])
+  onProgress?.('Backend + Base de données', 99)
 
   const allResults = [...results, backendResult, databaseResult]
 
