@@ -64,6 +64,26 @@ function buildStubFilesForMissingImports(code: string): Record<string, string> {
   return stubFiles
 }
 
+// Versions épinglées pour les dépendances lourdes fréquemment générées
+// (three.js pour la 3D, animation, etc.) : laisser Sandpack résoudre
+// 'latest' à chaque génération force une requête au registre npm avant de
+// pouvoir bundler quoi que ce soit, ce qui dépasse régulièrement le délai
+// d'attente de Sandpack ("Couldn't connect to server" / TIME_OUT) sur les
+// apps qui importent ces libs volumineuses — confirmé le 1er sept 2026 sur
+// un test pinball 3D. Les libs légères restent en 'latest'.
+const PINNED_VERSIONS: Record<string, string> = {
+  three: '0.160.0',
+  '@react-three/fiber': '8.15.0',
+  '@react-three/drei': '9.92.0',
+  'framer-motion': '11.0.0',
+  matter-js: '0.19.0',
+  'cannon-es': '0.20.0',
+  gsap: '3.12.5',
+  d3: '7.8.5',
+  recharts: '2.10.0',
+  'chart.js': '4.4.1',
+}
+
 function detectNpmDependencies(code: string): Record<string, string> {
   const deps: Record<string, string> = {}
   const importRegex = /import\s+(?:[\w*{}\s,]+\s+from\s+)?['"]([^'".\/][^'"]*)['"]/g
@@ -74,7 +94,7 @@ function detectNpmDependencies(code: string): Record<string, string> {
     const parts = pkg.split('/')
     pkg = pkg.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]
     if (BUILTIN_MODULES.has(pkg)) continue
-    deps[pkg] = 'latest'
+    deps[pkg] = PINNED_VERSIONS[pkg] || 'latest'
   }
 
   return deps
