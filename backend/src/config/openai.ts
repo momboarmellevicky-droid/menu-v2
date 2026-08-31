@@ -26,7 +26,7 @@ export const mistral = process.env.MISTRAL_API_KEY
 
 // Configuration des modèles
 export const AI_CONFIG = {
-  defaultModel: 'claude-sonnet-4-6',
+  defaultModel: 'claude-sonnet-5',
   fallbackModel: 'llama-3.3-70b-versatile',
   geminiModel: 'gemini-3.5-flash',
   mistralModel: 'mistral-large-latest',
