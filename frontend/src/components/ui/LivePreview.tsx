@@ -76,7 +76,7 @@ const PINNED_VERSIONS: Record<string, string> = {
   '@react-three/fiber': '8.15.0',
   '@react-three/drei': '9.92.0',
   'framer-motion': '11.0.0',
-  matter-js: '0.19.0',
+  'matter-js': '0.19.0',
   'cannon-es': '0.20.0',
   gsap: '3.12.5',
   d3: '7.8.5',
@@ -98,6 +98,101 @@ function detectNpmDependencies(code: string): Record<string, string> {
   }
 
   return deps
+}
+
+function buildFallbackHtml(sandboxFiles: Record<string, string>, npmDeps: Record<string, string>): string {
+  // Aperçu de secours qui ne dépend d'AUCUN serveur de bundling distant
+  // (contrairement à Sandpack) : Babel Standalone transpile TS/JSX
+  // directement dans l'iframe, et les librairies externes (three.js,
+  // etc.) sont chargées via le CDN esm.sh au lieu d'être "bundlées".
+  // Ajouté le 3 sept 2026 après des TIME_OUT répétés de Sandpack sur des
+  // apps lourdes (ex: pinball 3D) — solution de repli manuelle en
+  // attendant un vrai environnement d'exécution côté serveur.
+  const importMapEntries = Object.entries(npmDeps)
+    .map(([pkg]) => `"${pkg}": "https://esm.sh/${pkg}"`)
+    .join(',\n      ')
+
+  const filesJson = JSON.stringify(sandboxFiles)
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react-dom": "https://esm.sh/react-dom@18.3.1",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+    "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
+    "lucide-react": "https://esm.sh/lucide-react@0.383.0?external=react",
+    ${importMapEntries}
+  }
+}
+</script>
+<style>html,body,#root{height:100%;margin:0;background:#0a0a0f;}</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module">
+  const files = ${filesJson};
+  const blobUrls = {};
+
+  function resolvePath(fromPath, relImport) {
+    const base = fromPath.split('/').slice(0, -1);
+    const parts = relImport.split('/');
+    for (const p of parts) {
+      if (p === '.' ) continue;
+      if (p === '..') base.pop();
+      else base.push(p);
+    }
+    let joined = base.join('/');
+    if (!files[joined] && files[joined + '.tsx']) joined += '.tsx';
+    if (!files[joined] && files[joined + '.ts']) joined += '.ts';
+    return joined;
+  }
+
+  function transpile(path) {
+    if (blobUrls[path]) return blobUrls[path];
+    let source = files[path] || '';
+    // Réécrit les imports relatifs vers les blob URLs déjà transpilées
+    source = source.replace(/from\\s+['"](\\.[^'"]+)['"]/g, (m, rel) => {
+      const resolved = resolvePath(path, rel);
+      const url = transpile(resolved);
+      return 'from "' + url + '"';
+    });
+    const out = Babel.transform(source, {
+      presets: ['react', 'typescript'],
+      filename: path,
+    }).code;
+    const blob = new Blob([out], { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob);
+    blobUrls[path] = url;
+    return url;
+  }
+
+  (async () => {
+    try {
+      const entry = files['/App.tsx'] ? '/App.tsx' : Object.keys(files)[0];
+      const url = transpile(entry);
+      const mod = await import(url);
+      const Component = mod.default;
+      const ReactDOM = await import('react-dom/client');
+      const React = await import('react');
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(React.createElement(Component));
+    } catch (e) {
+      document.getElementById('root').innerHTML =
+        '<div style="color:#f87171;font-family:monospace;padding:20px;white-space:pre-wrap;">' +
+        'Erreur aperçu de secours:\\n' + (e && e.message ? e.message : e) + '</div>';
+      console.error(e);
+    }
+  })();
+</script>
+</body>
+</html>`
 }
 
 export default function LivePreview({ code, files, framework = 'react' }: LivePreviewProps) {
@@ -126,6 +221,7 @@ export default function LivePreview({ code, files, framework = 'react' }: LivePr
 
 function LivePreviewReact({ code, files }: { code: string; files?: Record<string, string> }) {
   const [showConsole, setShowConsole] = useState(false)
+  const [fallbackMode, setFallbackMode] = useState(false)
 
   const hasMultiFiles = files && Object.keys(files).length > 1
 
@@ -168,8 +264,23 @@ function LivePreviewReact({ code, files }: { code: string; files?: Record<string
           <Terminal size={14} />
           Console
         </button>
+        <button
+          onClick={() => setFallbackMode(v => !v)}
+          title="À utiliser si l'aperçu affiche 'Couldn't connect to server' / TIME_OUT : bascule vers un moteur d'aperçu qui ne dépend d'aucun serveur distant."
+          className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg transition-colors ${fallbackMode ? 'text-primary bg-primary/10' : 'text-text-muted hover:text-white hover:bg-white/5'}`}
+        >
+          ⚡ Aperçu de secours
+        </button>
       </div>
 
+      {fallbackMode ? (
+        <iframe
+          title="Aperçu de secours"
+          srcDoc={buildFallbackHtml(sandboxFiles, npmDeps)}
+          sandbox="allow-scripts allow-forms allow-popups allow-modals"
+          style={{ width: '100%', height: '85vh', minHeight: '600px', border: 'none', background: '#0a0a0f' }}
+        />
+      ) : (
       <SandpackProvider
         template="react-ts"
         theme="dark"
@@ -202,6 +313,7 @@ function LivePreviewReact({ code, files }: { code: string; files?: Record<string
         />
         {showConsole && <SandpackConsole style={{ height: '200px' }} />}
       </SandpackProvider>
+      )}
     </div>
   )
     }
