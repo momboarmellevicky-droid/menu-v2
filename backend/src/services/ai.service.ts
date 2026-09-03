@@ -188,6 +188,34 @@ RÈGLES STRICTES :
 
 Réponds UNIQUEMENT avec le SQL complet, dans un bloc de code markdown \`\`\`sql ... \`\`\`, rien avant, rien après.`,
 }
+const PLANNER: AIAgent = {
+  id: 'planner',
+  name: 'Planificateur',
+  role: 'planner',
+  // Fusion du 1er sept 2026 des 3 agents Analyste + Architecte + Designer
+  // (auparavant 3 appels IA séquentiels) en un seul appel : les 3 tâches ne
+  // produisent que du JSON de planification, aucune n'a besoin d'attendre le
+  // rendu texte complet de la précédente pour démarrer — contrairement au
+  // Développeur, qui lui reste un agent séparé pour préserver la qualité du
+  // code généré. Gain : 2 allers-retours IA économisés sur chaque génération.
+  systemPrompt: `Tu es un studio produit senior qui combine 3 rôles : Analyste de besoins, Architecte logiciel, et UX/UI Designer niveau Bolt.new / Lovable / Linear / Vercel.
+
+Réponds UNIQUEMENT avec un JSON strict de cette forme exacte, sans markdown :
+{
+  "analysis": { "objective": "...", "features": ["..."], "constraints": "...", "targetAudience": "...", "suggestedArchitecture": "frontend|fullstack|mobile" },
+  "architecture": { "stack": { "frontend": "...", "backend": "...", "database": "...", "api": "..." }, "dataModel": ["..."], "apiEndpoints": ["..."], "security": "..." },
+  "design": { "colorPalette": { "primary":"", "secondary":"", "accent":"", "background":"", "backgroundSecondary":"", "surface":"", "text":"", "textMuted":"", "border":"", "success":"", "danger":"" }, "typography": {}, "spacing": "", "elevation": {}, "radii": "", "components": ["..."], "microInteractions": "...", "layout": "...", "userFlow": ["..."] }
+}
+
+RÈGLES ABSOLUES POUR "analysis" :
+- Le champ "features" doit correspondre EXACTEMENT à ce que l'utilisateur a demandé, ni plus ni moins. N'ajoute et ne retire AUCUNE fonctionnalité non explicitement demandée. Si la demande est simple, la liste reste simple.
+
+RÈGLES ABSOLUES POUR "design" :
+- Couleurs riches et cohérentes (jamais de gris/bleu par défaut de navigateur), vrai contraste, identité visuelle forte adaptée au thème.
+- Ombres portées réalistes, espacement cohérent, rayons de bordure cohérents, micro-interactions (transitions 150-300ms), hiérarchie visuelle claire.
+- Le résultat doit donner l'impression d'un produit SaaS professionnel payant, jamais d'un projet scolaire ou d'un tutoriel.`,
+}
+
 export async function runMultiAgentPipeline(
   prompt: string,
   architecture: 'frontend' | 'fullstack' | 'mobile' = 'frontend',
@@ -217,18 +245,45 @@ export async function runMultiAgentPipeline(
   const optimizerAgent = framework === 'html' ? HTML_OPTIMIZER : AGENTS[5]
 
   try {
-    onProgress?.('Analyste', 10)
-    const analysis = await callAgent(AGENTS[0], enrichedPrompt)
-    results.push(analysis)
-    if (analysis.status === 'error') throw new Error(`Erreur Analyste: ${analysis.output}`)
+    onProgress?.('Planification (Analyse + Architecture + Design)', 10)
+    const planResult = await callAgent(PLANNER, enrichedPrompt + (architecture !== 'frontend' ? `\n\nType d'architecture demandé : ${architecture}` : ''))
 
-    onProgress?.('Architecte', 25)
-    const arch = await callAgent(AGENTS[1], JSON.stringify({ analysis: analysis.output, type: architecture }))
-    results.push(arch)
+    let analysis: GenerationResult, arch: GenerationResult, design: GenerationResult
 
-    onProgress?.('Designer', 40)
-    const design = await callAgent(AGENTS[2], JSON.stringify({ architecture: arch.output, features: analysis.output }))
-    results.push(design)
+    let parsedPlan: { analysis?: unknown; architecture?: unknown; design?: unknown } | null = null
+    if (planResult.status === 'success') {
+      try {
+        const jsonMatch = planResult.output.match(/\{[\s\S]*\}/)
+        parsedPlan = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(planResult.output)
+      } catch {
+        parsedPlan = null
+      }
+    }
+
+    if (parsedPlan && parsedPlan.analysis && parsedPlan.architecture && parsedPlan.design) {
+      const ts = new Date().toISOString()
+      analysis = { agent: 'Analyste', output: JSON.stringify(parsedPlan.analysis), status: 'success', timestamp: ts }
+      arch = { agent: 'Architecte', output: JSON.stringify(parsedPlan.architecture), status: 'success', timestamp: ts }
+      design = { agent: 'Designer', output: JSON.stringify(parsedPlan.design), status: 'success', timestamp: ts }
+      results.push(analysis, arch, design)
+    } else {
+      // Filet de sécurité : si le JSON combiné n'est pas exploitable (sortie
+      // malformée), on retombe sur les 3 appels séquentiels d'origine plutôt
+      // que de faire échouer toute la génération.
+      logger.warn('Planificateur combiné: JSON invalide, repli sur 3 appels séquentiels')
+      onProgress?.('Analyste', 15)
+      analysis = await callAgent(AGENTS[0], enrichedPrompt)
+      results.push(analysis)
+      if (analysis.status === 'error') throw new Error(`Erreur Analyste: ${analysis.output}`)
+
+      onProgress?.('Architecte', 25)
+      arch = await callAgent(AGENTS[1], JSON.stringify({ analysis: analysis.output, type: architecture }))
+      results.push(arch)
+
+      onProgress?.('Designer', 40)
+      design = await callAgent(AGENTS[2], JSON.stringify({ architecture: arch.output, features: analysis.output }))
+      results.push(design)
+    }
 
     onProgress?.('Développeur', 60)
     const dev = await callAgent(developerAgent, `
