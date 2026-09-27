@@ -1,12 +1,13 @@
 import { supabaseAdmin } from '../config/supabase'
 import { logger } from '../utils/logger'
+import { deployToGithub } from './github.service'
 import type { Deployment } from '../types'
 
 const VERCEL_API = 'https://api.vercel.com'
 
 export async function deployProject(
   projectId: string,
-  platform: 'web' | 'pwa' | 'android' | 'ios'
+  platform: 'web' | 'pwa' | 'android' | 'ios' | 'github'
 ): Promise<Deployment> {
   const { data: deployment, error } = await supabaseAdmin
     .from('deployments')
@@ -23,6 +24,8 @@ export async function deployProject(
   try {
     const buildResult = platform === 'web' || platform === 'pwa'
       ? await deployToVercel(projectId, platform)
+      : platform === 'github'
+      ? await deployToGithub(projectId)
       : await deployToExpo(projectId, platform)
 
     const { data: updated, error: updateError } = await supabaseAdmin

@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Globe, Smartphone, Rocket, Check, Loader2, ExternalLink, Copy, CheckCheck, AlertTriangle } from 'lucide-react'
+import { Globe, Smartphone, Rocket, Check, Loader2, ExternalLink, Copy, CheckCheck, AlertTriangle, Github } from 'lucide-react'
 import { api } from '../lib/api'
 import { useProjectStore } from '../stores/projectStore'
 import { useCodeStore } from '../stores/codeStore'
 
 interface DeployTarget {
   id: string
-  platform: 'web' | 'pwa' | 'android' | 'ios'
+  platform: 'web' | 'pwa' | 'android' | 'ios' | 'github'
   name: string
   icon: typeof Globe
   status: 'ready' | 'building' | 'deployed' | 'error'
@@ -20,6 +20,7 @@ const initialTargets: DeployTarget[] = [
   { id: '2', platform: 'pwa', name: 'PWA', icon: Globe, status: 'ready' },
   { id: '3', platform: 'android', name: 'Android', icon: Smartphone, status: 'ready' },
   { id: '4', platform: 'ios', name: 'iOS', icon: Smartphone, status: 'ready' },
+  { id: '5', platform: 'github', name: 'Dépôt GitHub', icon: Github, status: 'ready' },
 ]
 
 export default function DeployPage() {

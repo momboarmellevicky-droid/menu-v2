@@ -25,6 +25,7 @@ export interface AgentLog {
 }
 
 export interface Project {
+  githubRepoUrl?: string
   id: string
   userId: string
   name: string
@@ -72,7 +73,7 @@ export interface MarketplaceItem {
 export interface Deployment {
   id: string
   projectId: string
-  platform: 'web' | 'pwa' | 'android' | 'ios'
+  platform: 'web' | 'pwa' | 'android' | 'ios' | 'github'
   status: 'pending' | 'building' | 'deployed' | 'error'
   url?: string
   buildLogs?: string
