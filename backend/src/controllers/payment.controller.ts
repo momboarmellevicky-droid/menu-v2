@@ -27,12 +27,12 @@ export async function startSubscriptionPayment(req: Request, res: Response) {
     }
 
     const { amountFcfa, credits } = PLANS[plan]
-  const reference = `M2${Date.now().toString(36).toUpperCase()}`
+    const reference = `M2${Date.now().toString(36).toUpperCase()}`
 
     // Enregistrement de la tentative AVANT l'appel SingPay, pour ne jamais
     // perdre la trace d'un paiement qui aurait réussi côté SingPay mais
     // dont la réponse n'aurait pas pu être traitée côté serveur.
-    const { error: insertError } = await supabaseAdmin.from('menu_payments').insert({
+    const { error: insertError } = await supabaseAdmin.from('payments').insert({
       user_id: userId,
       plan,
       amount_fcfa: amountFcfa,
@@ -54,7 +54,7 @@ export async function startSubscriptionPayment(req: Request, res: Response) {
     })
 
     await supabaseAdmin
-      .from('menu_payments')
+      .from('payments')
       .update({
         status: result.status,
         transaction_id: result.transactionId,
@@ -83,7 +83,7 @@ export async function getSubscriptionPaymentStatus(req: Request, res: Response) 
     const userId = req.user!.id
 
     const { data: payment, error } = await supabaseAdmin
-      .from('menu_payments')
+      .from('payments')
       .select('*')
       .eq('reference', reference)
       .eq('user_id', userId)
@@ -107,7 +107,7 @@ export async function getSubscriptionPaymentStatus(req: Request, res: Response) 
 
     if (result.status !== payment.status) {
       await supabaseAdmin
-        .from('menu_payments')
+        .from('payments')
         .update({ status: result.status, updated_at: new Date().toISOString() })
         .eq('reference', reference)
     }
@@ -134,6 +134,7 @@ export async function startStripeCheckout(req: Request, res: Response) {
     if (plan !== 'pro' && plan !== 'team') {
       throw new AppError("Plan invalide. Valeurs acceptées : 'pro' ou 'team'.", 400)
     }
+
     if (!isStripeConfigured()) {
       throw new AppError('Paiement par carte momentanément indisponible.', 503)
     }
@@ -181,7 +182,7 @@ export async function verifyStripeCheckout(req: Request, res: Response) {
   }
 }
 
-export async function activatePlan(userId: string, plan: 'pro' | 'team', credits: number) {
+async function activatePlan(userId: string, plan: 'pro' | 'team', credits: number) {
   const renewsAt = new Date()
   renewsAt.setMonth(renewsAt.getMonth() + 1)
 
